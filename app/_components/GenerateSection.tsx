@@ -94,7 +94,7 @@ export default function GenerateSection({
     <section
       ref={ref}
       data-idx="2"
-      className="snap-start h-[100dvh] w-full flex flex-col bg-white"
+      className="snap-start snap-always h-[100dvh] w-full flex flex-col bg-white"
       style={{
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",

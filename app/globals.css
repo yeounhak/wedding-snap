@@ -88,3 +88,44 @@ body {
 .bounce-arrow {
   animation: bounce-arrow 1.6s ease-in-out infinite;
 }
+
+@keyframes chev-drift {
+  0% {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  60% {
+    transform: translateY(6px);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+}
+
+.chev-drift-1 {
+  animation: chev-drift 1.6s ease-out infinite;
+}
+
+.chev-drift-2 {
+  animation: chev-drift 1.6s ease-out infinite;
+  animation-delay: 0.55s;
+}
+
+@keyframes cta-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+.cta-breathe {
+  animation: cta-breathe 2.2s ease-in-out infinite;
+}

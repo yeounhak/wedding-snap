@@ -31,7 +31,7 @@ export default function LandingSection({ ref, active, onStart }: Props) {
     <section
       ref={ref}
       data-idx="0"
-      className="snap-start h-[100dvh] w-full flex flex-col items-center bg-white"
+      className="snap-start snap-always h-[100dvh] w-full flex flex-col items-center bg-white"
     >
       <div className="w-full pt-[env(safe-area-inset-top)] px-6 pb-3 pt-5 flex items-center justify-between">
         <span className="text-base font-semibold tracking-tight">
@@ -47,7 +47,7 @@ export default function LandingSection({ ref, active, onStart }: Props) {
         {SAMPLES.map((s, i) => (
           <div
             key={s.src}
-            className="min-w-full h-full snap-center flex items-center justify-center px-5"
+            className="min-w-full h-full snap-center snap-always flex items-center justify-center px-5"
           >
             <div className="relative w-full h-full max-h-[68vh] rounded-3xl overflow-hidden bg-neutral-100 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)]">
               <Image
@@ -68,7 +68,10 @@ export default function LandingSection({ ref, active, onStart }: Props) {
         ))}
       </div>
 
-      <div className="w-full px-6 pt-3 pb-5 flex flex-col items-center gap-3">
+      <div
+        className="w-full px-6 pt-3 pb-3 flex flex-col items-center gap-3"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <div className="flex gap-1.5">
           {SAMPLES.map((_, i) => (
             <span
@@ -87,28 +90,39 @@ export default function LandingSection({ ref, active, onStart }: Props) {
         <button
           type="button"
           onClick={onStart}
-          className="mt-1 w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium active:scale-[0.98] transition"
+          aria-label="시작하기 — 탭하거나 아래로 스와이프"
+          className="mt-1 w-full max-w-xs flex flex-col items-center active:scale-[0.97] transition-transform"
         >
-          시작하기
+          <div className="w-full h-12 rounded-full bg-neutral-900 text-white font-medium flex items-center justify-center text-base cta-breathe">
+            시작하기
+          </div>
+          <div className="relative mt-2 h-7 w-6 pointer-events-none">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="absolute inset-x-0 top-0 w-6 h-6 text-neutral-400 chev-drift-1"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="absolute inset-x-0 top-0 w-6 h-6 text-neutral-400 chev-drift-2"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </div>
         </button>
-        <div
-          className={`flex flex-col items-center text-xs text-neutral-400 ${
-            active ? "bounce-arrow" : ""
-          }`}
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-        >
-          <span>아래로 스와이프</span>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        </div>
       </div>
     </section>
   );
