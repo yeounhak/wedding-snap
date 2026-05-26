@@ -10,7 +10,7 @@ type Props = {
   onStart: () => void;
 };
 
-export default function LandingSection({ ref, active, onStart }: Props) {
+export default function LandingSection({ ref, onStart }: Props) {
   const swipeRef = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
 
@@ -33,12 +33,35 @@ export default function LandingSection({ ref, active, onStart }: Props) {
       data-idx="0"
       className="snap-start snap-always h-[100dvh] w-full flex flex-col items-center bg-white"
     >
-      <div className="w-full pt-[env(safe-area-inset-top)] px-6 pb-3 pt-5 flex items-center justify-between">
-        <span className="text-base font-semibold tracking-tight">
+      <header
+        className="w-full px-6 pb-3 flex items-center gap-2.5"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 1rem)" }}
+      >
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[11px] bg-neutral-900 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.3)]">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="7" width="18" height="13" rx="3.5" />
+            <path d="M8.6 7 9.7 5h4.6l1.1 2" />
+            <path
+              d="M12 17.2c-1.6-1-2.6-1.9-2.6-3.1 0-.85.66-1.5 1.5-1.5.5 0 .95.24 1.1.6.15-.36.6-.6 1.1-.6.84 0 1.5.65 1.5 1.5 0 1.2-1 2.1-2.6 3.1Z"
+              fill="white"
+              stroke="none"
+            />
+          </svg>
+        </span>
+        <span className="text-[17px] font-semibold tracking-tight text-neutral-900">
           Wedding Snap
         </span>
-        <span className="text-xs text-neutral-400">샘플</span>
-      </div>
+      </header>
 
       <div
         ref={swipeRef}
@@ -47,9 +70,9 @@ export default function LandingSection({ ref, active, onStart }: Props) {
         {SAMPLES.map((s, i) => (
           <div
             key={s.src}
-            className="min-w-full h-full snap-center snap-always flex items-center justify-center px-5"
+            className="min-w-full h-full snap-center snap-always flex items-center justify-center px-5 py-2"
           >
-            <div className="relative w-full h-full max-h-[68vh] rounded-3xl overflow-hidden bg-neutral-100 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)]">
+            <div className="relative w-full h-full rounded-3xl overflow-hidden bg-neutral-100 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)]">
               <Image
                 src={s.src}
                 alt={s.caption}
@@ -58,6 +81,9 @@ export default function LandingSection({ ref, active, onStart }: Props) {
                 sizes="100vw"
                 className="object-cover"
               />
+              <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/35 backdrop-blur-sm text-[11px] font-medium tracking-wide text-white">
+                AI 예시
+              </div>
               <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/55 via-black/15 to-transparent">
                 <p className="text-white text-sm font-medium drop-shadow-sm">
                   {s.caption}
