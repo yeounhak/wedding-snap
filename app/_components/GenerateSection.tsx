@@ -13,6 +13,15 @@ type Props = {
 
 type Status = "idle" | "loading" | "success" | "error";
 
+type GenerateJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+type GenerateJobResponse = {
+  jobId: string;
+  status: GenerateJobStatus;
+  resultUrl?: string;
+  error?: string;
+};
+
 const PROGRESS_MESSAGES = [
   "사진을 분석하고 있어요…",
   "두 분의 모습을 담는 중이에요…",
@@ -32,9 +41,16 @@ export default function GenerateSection({
   const [error, setError] = useState<string | null>(null);
   const [msgIdx, setMsgIdx] = useState(0);
   const triggeredRef = useRef(false);
+  const generationSeqRef = useRef(0);
+  const hasInputs = Boolean(male && female);
+  const displayStatus = hasInputs ? status : "idle";
+  const displayResult = hasInputs ? result : null;
+  const displayError = hasInputs ? error : null;
 
   const generate = useCallback(async () => {
     if (!male || !female) return;
+    const generationSeq = generationSeqRef.current + 1;
+    generationSeqRef.current = generationSeq;
     setStatus("loading");
     setResult(null);
     setError(null);
@@ -48,10 +64,19 @@ export default function GenerateSection({
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error ?? `요청 실패 (${res.status})`);
       }
-      const data = (await res.json()) as { url: string };
-      setResult(data.url);
+      const data = (await res.json()) as GenerateJobResponse;
+      const finalJob = await pollJob(
+        data.jobId,
+        () => generationSeqRef.current === generationSeq,
+      );
+      if (generationSeqRef.current !== generationSeq) return;
+      if (!finalJob.resultUrl) {
+        throw new Error("생성된 이미지 URL을 받지 못했습니다");
+      }
+      setResult(finalJob.resultUrl);
       setStatus("success");
     } catch (err) {
+      if (generationSeqRef.current !== generationSeq) return;
       setError(err instanceof Error ? err.message : "알 수 없는 오류");
       setStatus("error");
     }
@@ -65,25 +90,23 @@ export default function GenerateSection({
     void generate();
   }, [active, male, female, generate]);
 
-  // Reset trigger when files cleared (so re-uploading regenerates)
+  // Reset trigger when files clear so re-uploading starts a new Workflow.
   useEffect(() => {
     if (!male || !female) {
+      generationSeqRef.current += 1;
       triggeredRef.current = false;
-      setStatus("idle");
-      setResult(null);
-      setError(null);
     }
   }, [male, female]);
 
   // Cycle progress messages while loading
   useEffect(() => {
-    if (status !== "loading") return;
+    if (status !== "loading" || !hasInputs) return;
     const id = setInterval(
       () => setMsgIdx((i) => (i + 1) % PROGRESS_MESSAGES.length),
       1100,
     );
     return () => clearInterval(id);
-  }, [status]);
+  }, [hasInputs, status]);
 
   const regenerate = () => {
     triggeredRef.current = true;
@@ -100,14 +123,11 @@ export default function GenerateSection({
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <div className="px-6 pt-7 pb-3">
-        <p className="text-xs text-neutral-400 tracking-wide uppercase">
-          Step 2 of 2
-        </p>
-        <h2 className="mt-1 text-2xl font-semibold tracking-tight">
-          {status === "success"
+      <div className="px-6 pt-8 pb-3">
+        <h2 className="text-2xl font-semibold tracking-tight">
+          {displayStatus === "success"
             ? "두 분의 웨딩 사진이에요"
-            : status === "error"
+            : displayStatus === "error"
               ? "다시 시도해주세요"
               : "사진을 만들고 있어요"}
         </h2>
@@ -115,7 +135,7 @@ export default function GenerateSection({
 
       <div className="flex-1 px-6 flex items-center justify-center min-h-0">
         <div className="relative w-full h-full max-h-[62vh] rounded-3xl overflow-hidden bg-neutral-100 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)]">
-          {status === "loading" || status === "idle" ? (
+          {displayStatus === "loading" || displayStatus === "idle" ? (
             <>
               <div className="absolute inset-0 shimmer" />
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6">
@@ -125,9 +145,9 @@ export default function GenerateSection({
                 </p>
               </div>
             </>
-          ) : status === "success" && result ? (
+          ) : displayStatus === "success" && displayResult ? (
             <Image
-              src={result}
+              src={displayResult}
               alt="생성된 웨딩 사진"
               fill
               sizes="100vw"
@@ -139,17 +159,17 @@ export default function GenerateSection({
               <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-2xl">
                 !
               </div>
-              <p className="text-sm text-neutral-700">{error}</p>
+              <p className="text-sm text-neutral-700">{displayError}</p>
             </div>
           )}
         </div>
       </div>
 
       <div className="px-6 pt-5 pb-6 flex flex-col items-center gap-2.5">
-        {status === "success" && result ? (
+        {displayStatus === "success" && displayResult ? (
           <>
             <a
-              href={result}
+              href={displayResult}
               download="wedding-snap.jpg"
               className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition"
             >
@@ -180,7 +200,7 @@ export default function GenerateSection({
               처음으로
             </button>
           </>
-        ) : status === "error" ? (
+        ) : displayStatus === "error" ? (
           <>
             <button
               type="button"
@@ -203,4 +223,31 @@ export default function GenerateSection({
       </div>
     </section>
   );
+}
+
+async function pollJob(jobId: string, isCurrent: () => boolean) {
+  while (isCurrent()) {
+    await wait(2500);
+    if (!isCurrent()) break;
+
+    const res = await fetch(`/api/generate/${jobId}`, { cache: "no-store" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error ?? `상태 확인 실패 (${res.status})`);
+    }
+
+    const data = (await res.json()) as GenerateJobResponse;
+    if (data.status === "succeeded") {
+      return data;
+    }
+    if (data.status === "failed") {
+      throw new Error(data.error ?? "이미지 생성에 실패했습니다");
+    }
+  }
+
+  throw new Error("요청이 취소되었습니다");
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

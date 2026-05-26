@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 type Props = {
   ref?: React.Ref<HTMLElement>;
@@ -91,17 +91,15 @@ function UploadSlot({
   onChange: (f: File | null) => void;
   tone: "bride" | "groom";
 }) {
-  const [preview, setPreview] = useState<string | null>(null);
+  const preview = useMemo(() => {
+    if (!file) return null;
+    return URL.createObjectURL(file);
+  }, [file]);
 
   useEffect(() => {
-    if (!file) {
-      setPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    if (!preview) return;
+    return () => URL.revokeObjectURL(preview);
+  }, [preview]);
 
   const id = `upload-${label}`;
   const toneBg =
