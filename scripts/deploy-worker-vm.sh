@@ -34,6 +34,18 @@ set -a
 . "${ENV_FILE}"
 set +a
 
+strip_trailing_cr() {
+  local var_name="$1"
+  if [[ -v "${var_name}" ]]; then
+    printf -v "${var_name}" '%s' "${!var_name%$'\r'}"
+    export "${var_name}"
+  fi
+}
+
+strip_trailing_cr TEMPORAL_ADDRESS
+strip_trailing_cr TEMPORAL_NAMESPACE
+strip_trailing_cr TEMPORAL_API_KEY
+
 registry_host="${IMAGE%%/*}"
 registry_token=""
 if command -v gcloud >/dev/null 2>&1; then
@@ -110,6 +122,9 @@ if [[ -n "${TEMPORAL_ADDRESS:-}" ]]; then
 fi
 if [[ -n "${TEMPORAL_NAMESPACE:-}" ]]; then
   temporal_args+=(--namespace "${TEMPORAL_NAMESPACE}")
+fi
+if [[ -n "${TEMPORAL_API_KEY:-}" ]]; then
+  temporal_args+=(--tls)
 fi
 
 deployment_visible=false
