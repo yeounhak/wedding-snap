@@ -3,6 +3,8 @@ import "server-only";
 import type { User } from "@supabase/supabase-js";
 
 export const KAKAO_OAUTH_STATE_COOKIE = "wedding_snap_kakao_oauth_state";
+export const KAKAO_POST_LOGIN_REDIRECT_COOKIE =
+  "wedding_snap_post_login_redirect";
 export const KAKAO_OIDC_SCOPE = "openid profile_nickname profile_image";
 export const SYNTHETIC_KAKAO_EMAIL_DOMAIN = "users.wedding-snap.invalid";
 

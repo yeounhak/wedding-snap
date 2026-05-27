@@ -7,6 +7,7 @@ import {
   getKakaoProviderId,
   getSyntheticKakaoEmail,
   KAKAO_OAUTH_STATE_COOKIE,
+  KAKAO_POST_LOGIN_REDIRECT_COOKIE,
 } from "@/app/_lib/kakao-auth";
 import {
   createServerSupabaseClient,
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const expectedState = request.cookies.get(KAKAO_OAUTH_STATE_COOKIE)?.value;
-  const redirectUrl = new URL("/", origin);
+  const redirectUrl = getPostLoginRedirectUrl(request, origin);
 
   if (!code) {
     return redirectWithError(redirectUrl, "missing_kakao_code");
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(redirectUrl);
   response.cookies.delete(KAKAO_OAUTH_STATE_COOKIE);
+  response.cookies.delete(KAKAO_POST_LOGIN_REDIRECT_COOKIE);
   return response;
 }
 
@@ -64,7 +66,17 @@ function redirectWithError(url: URL, error: string) {
   url.searchParams.set("auth_error", error);
   const response = NextResponse.redirect(url);
   response.cookies.delete(KAKAO_OAUTH_STATE_COOKIE);
+  response.cookies.delete(KAKAO_POST_LOGIN_REDIRECT_COOKIE);
   return response;
+}
+
+function getPostLoginRedirectUrl(request: NextRequest, origin: string) {
+  const nextPath = request.cookies.get(KAKAO_POST_LOGIN_REDIRECT_COOKIE)?.value;
+  if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
+    return new URL("/", origin);
+  }
+
+  return new URL(nextPath, origin);
 }
 
 async function ensureSyntheticKakaoEmail(user: User) {

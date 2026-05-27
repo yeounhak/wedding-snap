@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Props = {
@@ -8,6 +7,7 @@ type Props = {
   active: boolean;
   male: File | null;
   female: File | null;
+  restoredJob: GenerateJobResponse | null;
   onRestart: () => void;
 };
 
@@ -15,12 +15,33 @@ type Status = "idle" | "loading" | "success" | "error";
 
 type GenerateJobStatus = "queued" | "running" | "succeeded" | "failed";
 
-type GenerateJobResponse = {
+export type GenerateJobResponse = {
   jobId: string;
   status: GenerateJobStatus;
   resultUrl?: string;
   error?: string;
+  watermarkRequired?: boolean;
+  creditsRemaining?: number;
 };
+
+type GenerateErrorResponse = {
+  code?: "LOGIN_REQUIRED" | "CREDIT_REQUIRED" | "RATE_LIMITED";
+  error?: string;
+  creditsRemaining?: number;
+};
+
+type PaymentOrderResponse = {
+  orderId: string;
+  orderName: string;
+  amount: number;
+  currency: "KRW";
+  customerKey: string;
+  clientKey: string;
+  successUrl: string;
+  failUrl: string;
+};
+
+type ErrorAction = "login" | "purchase" | null;
 
 const PROGRESS_MESSAGES = [
   "사진을 분석하고 있어요…",
@@ -34,18 +55,24 @@ export default function GenerateSection({
   active,
   male,
   female,
+  restoredJob,
   onRestart,
 }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<string | null>(null);
+  const [job, setJob] = useState<GenerateJobResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorAction, setErrorAction] = useState<ErrorAction>(null);
   const [msgIdx, setMsgIdx] = useState(0);
+  const [paymentWorking, setPaymentWorking] = useState(false);
   const triggeredRef = useRef(false);
   const generationSeqRef = useRef(0);
   const hasInputs = Boolean(male && female);
-  const displayStatus = hasInputs ? status : "idle";
-  const displayResult = hasInputs ? result : null;
-  const displayError = hasInputs ? error : null;
+  const hasRestoredJob = Boolean(restoredJob?.resultUrl);
+  const hasDisplayContext = hasInputs || hasRestoredJob;
+  const displayStatus = hasDisplayContext ? status : "idle";
+  const displayResult = hasDisplayContext ? result : null;
+  const displayError = hasDisplayContext ? error : null;
 
   const generate = useCallback(async () => {
     if (!male || !female) return;
@@ -53,7 +80,9 @@ export default function GenerateSection({
     generationSeqRef.current = generationSeq;
     setStatus("loading");
     setResult(null);
+    setJob(null);
     setError(null);
+    setErrorAction(null);
     setMsgIdx(0);
     try {
       const fd = new FormData();
@@ -61,7 +90,13 @@ export default function GenerateSection({
       fd.append("female", female);
       const res = await fetch("/api/generate", { method: "POST", body: fd });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        const data = (await res.json().catch(() => ({}))) as GenerateErrorResponse;
+        if (data.code === "LOGIN_REQUIRED" || data.code === "RATE_LIMITED") {
+          setErrorAction("login");
+        }
+        if (data.code === "CREDIT_REQUIRED") {
+          setErrorAction("purchase");
+        }
         throw new Error(data?.error ?? `요청 실패 (${res.status})`);
       }
       const data = (await res.json()) as GenerateJobResponse;
@@ -73,6 +108,7 @@ export default function GenerateSection({
       if (!finalJob.resultUrl) {
         throw new Error("생성된 이미지 URL을 받지 못했습니다");
       }
+      setJob(finalJob);
       setResult(finalJob.resultUrl);
       setStatus("success");
     } catch (err) {
@@ -81,6 +117,20 @@ export default function GenerateSection({
       setStatus("error");
     }
   }, [male, female]);
+
+  useEffect(() => {
+    if (!restoredJob?.resultUrl) return;
+    const id = window.setTimeout(() => {
+      generationSeqRef.current += 1;
+      triggeredRef.current = true;
+      setJob(restoredJob);
+      setResult(restoredJob.resultUrl ?? null);
+      setError(null);
+      setErrorAction(null);
+      setStatus("success");
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [restoredJob]);
 
   // Trigger once when this section first becomes active with both files
   useEffect(() => {
@@ -93,10 +143,11 @@ export default function GenerateSection({
   // Reset trigger when files clear so re-uploading starts a new Workflow.
   useEffect(() => {
     if (!male || !female) {
+      if (restoredJob?.resultUrl) return;
       generationSeqRef.current += 1;
       triggeredRef.current = false;
     }
-  }, [male, female]);
+  }, [male, female, restoredJob]);
 
   // Cycle progress messages while loading
   useEffect(() => {
@@ -111,6 +162,38 @@ export default function GenerateSection({
   const regenerate = () => {
     triggeredRef.current = true;
     void generate();
+  };
+
+  const loginToUnlock = () => {
+    if (!job?.jobId) return;
+    const next = `/?unlockJobId=${encodeURIComponent(job.jobId)}`;
+    window.location.assign(`/api/auth/kakao/login?next=${encodeURIComponent(next)}`);
+  };
+
+  const loginAndContinue = () => {
+    window.location.assign("/api/auth/kakao/login");
+  };
+
+  const purchaseCredits = async () => {
+    setPaymentWorking(true);
+    setError(null);
+    try {
+      const orderResponse = await fetch("/api/payments/toss/orders", {
+        method: "POST",
+      });
+      if (!orderResponse.ok) {
+        const data = (await orderResponse.json().catch(() => ({}))) as GenerateErrorResponse;
+        throw new Error(data.error ?? `결제 요청 실패 (${orderResponse.status})`);
+      }
+
+      const order = (await orderResponse.json()) as PaymentOrderResponse;
+      await requestTossPayment(order);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "결제를 시작하지 못했습니다");
+      setStatus("error");
+      setErrorAction("purchase");
+      setPaymentWorking(false);
+    }
   };
 
   return (
@@ -146,13 +229,11 @@ export default function GenerateSection({
               </div>
             </>
           ) : displayStatus === "success" && displayResult ? (
-            <Image
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={displayResult}
               alt="생성된 웨딩 사진"
-              fill
-              sizes="100vw"
-              className="object-cover"
-              priority
+              className="absolute inset-0 h-full w-full object-cover"
             />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
@@ -185,13 +266,24 @@ export default function GenerateSection({
               </svg>
               사진 저장하기
             </a>
-            <button
-              type="button"
-              onClick={regenerate}
-              className="w-full max-w-xs h-11 rounded-full border border-neutral-200 text-neutral-700 font-medium active:scale-[0.98] transition"
-            >
-              다시 만들기
-            </button>
+            {job?.watermarkRequired ? (
+              <button
+                type="button"
+                onClick={loginToUnlock}
+                className="w-full max-w-xs h-11 rounded-full bg-[#FEE500] text-[#191919] font-semibold active:scale-[0.98] transition"
+              >
+                카카오 로그인하고 워터마크 제거
+              </button>
+            ) : null}
+            {hasInputs ? (
+              <button
+                type="button"
+                onClick={regenerate}
+                className="w-full max-w-xs h-11 rounded-full border border-neutral-200 text-neutral-700 font-medium active:scale-[0.98] transition"
+              >
+                다시 만들기
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onRestart}
@@ -202,13 +294,32 @@ export default function GenerateSection({
           </>
         ) : displayStatus === "error" ? (
           <>
-            <button
-              type="button"
-              onClick={regenerate}
-              className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium active:scale-[0.98] transition"
-            >
-              다시 시도
-            </button>
+            {errorAction === "login" ? (
+              <button
+                type="button"
+                onClick={loginAndContinue}
+                className="w-full max-w-xs h-12 rounded-full bg-[#FEE500] text-[#191919] font-semibold active:scale-[0.98] transition"
+              >
+                카카오 로그인
+              </button>
+            ) : errorAction === "purchase" ? (
+              <button
+                type="button"
+                onClick={purchaseCredits}
+                disabled={paymentWorking}
+                className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium active:scale-[0.98] transition disabled:opacity-60"
+              >
+                {paymentWorking ? "결제 준비 중" : "크레딧 구매하기"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={regenerate}
+                className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium active:scale-[0.98] transition"
+              >
+                다시 시도
+              </button>
+            )}
             <button
               type="button"
               onClick={onRestart}
@@ -250,4 +361,62 @@ async function pollJob(jobId: string, isCurrent: () => boolean) {
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestTossPayment(order: PaymentOrderResponse) {
+  await loadTossPaymentsSdk();
+  if (!window.TossPayments) {
+    throw new Error("토스페이먼츠 SDK를 불러오지 못했습니다");
+  }
+
+  const tossPayments = window.TossPayments(order.clientKey);
+  const payment = tossPayments.payment({ customerKey: order.customerKey });
+  await payment.requestPayment({
+    method: "CARD",
+    amount: { value: order.amount, currency: order.currency },
+    orderId: order.orderId,
+    orderName: order.orderName,
+    successUrl: order.successUrl,
+    failUrl: order.failUrl,
+  });
+}
+
+async function loadTossPaymentsSdk() {
+  if (window.TossPayments) return;
+
+  await new Promise<void>((resolve, reject) => {
+    const existing = document.getElementById("toss-payments-sdk");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("SDK load failed")), {
+        once: true,
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "toss-payments-sdk";
+    script.src = "https://js.tosspayments.com/v2/standard";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("SDK load failed"));
+    document.head.appendChild(script);
+  });
+}
+
+declare global {
+  interface Window {
+    TossPayments?: (clientKey: string) => {
+      payment: (params: { customerKey: string }) => {
+        requestPayment: (params: {
+          method: "CARD";
+          amount: { value: number; currency: "KRW" };
+          orderId: string;
+          orderName: string;
+          successUrl: string;
+          failUrl: string;
+        }) => Promise<void>;
+      };
+    };
+  }
 }

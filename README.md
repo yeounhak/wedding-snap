@@ -16,6 +16,42 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Generation Access Setup
+
+Apply the Supabase migration in `supabase/migrations` before enabling generation
+in a shared environment. It creates the private `wedding-snap-jobs` storage
+bucket, generation jobs, anonymous quota windows, login unlocks, payment orders,
+and credit ledger tables.
+
+Required server environment variables:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SECRET_KEY=
+KAKAO_REST_API_KEY=
+KAKAO_CLIENT_SECRET=
+OPENAI_API_KEY=
+TOSS_SECRET_KEY=
+NEXT_PUBLIC_TOSS_CLIENT_KEY=
+```
+
+Optional policy/product variables:
+
+```bash
+WEDDING_SNAP_DEVICE_SECRET=
+WEDDING_SNAP_STORAGE_BUCKET=wedding-snap-jobs
+WEDDING_SNAP_ANONYMOUS_IP_DAILY_LIMIT=6
+WEDDING_SNAP_CREDIT_PACK_SKU=wedding-snap-credit-5
+WEDDING_SNAP_CREDIT_PACK_NAME=웨딩 스냅 5장 크레딧
+WEDDING_SNAP_CREDIT_PACK_AMOUNT=3900
+WEDDING_SNAP_CREDIT_PACK_CREDITS=5
+```
+
+Anonymous users can generate one watermarked image per device quota window.
+Kakao login can unlock that same device's anonymous result once without another
+OpenAI generation. Paid users spend one credit per clean generation.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
