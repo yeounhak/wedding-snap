@@ -35,13 +35,30 @@ set -a
 set +a
 
 registry_host="${IMAGE%%/*}"
+registry_token=""
 if command -v gcloud >/dev/null 2>&1; then
-  gcloud auth print-access-token |
-    "${PODMAN_BIN}" login \
-      --username oauth2accesstoken \
-      --password-stdin \
-      "https://${registry_host}"
+  registry_token="$(timeout 30s gcloud auth print-access-token --quiet 2>/dev/null || true)"
 fi
+
+if [[ -z "${registry_token}" ]] && command -v curl >/dev/null 2>&1; then
+  metadata_token_json="$(curl -fsS --connect-timeout 2 --max-time 10 \
+    -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" 2>/dev/null || true)"
+  registry_token="$(printf '%s' "${metadata_token_json}" |
+    sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+fi
+
+if [[ -z "${registry_token}" ]]; then
+  echo "Could not obtain a registry access token on the worker VM" >&2
+  exit 1
+fi
+
+printf '%s\n' "${registry_token}" |
+  "${PODMAN_BIN}" login \
+    --username oauth2accesstoken \
+    --password-stdin \
+    "https://${registry_host}"
+unset registry_token metadata_token_json
 
 "${PODMAN_BIN}" pull "${IMAGE}"
 
