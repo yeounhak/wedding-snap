@@ -2,13 +2,34 @@ import { Client, Connection, WorkflowExecutionAlreadyStartedError } from "@tempo
 import { loadClientConnectConfig } from "@temporalio/envconfig";
 
 import { getJobWorkflowId } from "./generate-jobs";
+import {
+  getTemporalWorkflowVersioningOverride,
+  type TemporalWorkerDeploymentVersion,
+  type TemporalWorkflowVersioningOverride,
+} from "./temporal-versioning";
 
 const TASK_QUEUE =
   process.env.TEMPORAL_TASK_QUEUE ?? "wedding-snap-image-generation";
 
 let clientPromise: Promise<Client> | undefined;
 
-export async function startGenerateWorkflow(jobId: string) {
+export type GenerateWorkflowVersioning = {
+  deploymentVersion?: TemporalWorkerDeploymentVersion;
+  versioningOverride?: TemporalWorkflowVersioningOverride;
+};
+
+export function resolveGenerateWorkflowVersioning(): GenerateWorkflowVersioning {
+  const versioningOverride = getTemporalWorkflowVersioningOverride();
+  return {
+    deploymentVersion: versioningOverride?.pinnedTo,
+    versioningOverride,
+  };
+}
+
+export async function startGenerateWorkflow(
+  jobId: string,
+  versioning = resolveGenerateWorkflowVersioning(),
+) {
   const client = await getTemporalClient();
   const workflowId = getJobWorkflowId(jobId);
 
@@ -17,6 +38,7 @@ export async function startGenerateWorkflow(jobId: string) {
       workflowId,
       taskQueue: TASK_QUEUE,
       args: [jobId],
+      versioningOverride: versioning.versioningOverride,
     });
   } catch (error) {
     if (error instanceof WorkflowExecutionAlreadyStartedError) {

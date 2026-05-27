@@ -1,4 +1,4 @@
-import { proxyActivities } from "@temporalio/workflow";
+import { proxyActivities, setWorkflowOptions } from "@temporalio/workflow";
 
 import type * as activities from "./activities";
 
@@ -39,3 +39,8 @@ export async function generateWeddingImageWorkflow(jobId: string) {
     throw error;
   }
 }
+
+setWorkflowOptions(
+  { versioningBehavior: "PINNED" },
+  generateWeddingImageWorkflow,
+);

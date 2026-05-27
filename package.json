@@ -6,6 +6,7 @@
     "dev": "next dev",
     "worker": "tsx temporal/worker.ts",
     "worker:dev": "tsx watch temporal/worker.ts",
+    "worker:typecheck": "tsc -p tsconfig.worker.json --noEmit",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

@@ -11,6 +11,11 @@ export type GenerateJobRecord = {
   status: GenerateJobStatus;
   createdAt: string;
   updatedAt: string;
+  sharedAt: string | null;
+  temporalWorker: {
+    deploymentName: string | null;
+    buildId: string | null;
+  };
   access: {
     mode: GenerateJobAccessMode;
     requiresWatermark: boolean;
@@ -58,6 +63,8 @@ type CreateGenerateJobParams = {
   ipPrefixHash?: string | null;
   quotaWindowId?: string | null;
   creditLedgerId?: string | null;
+  temporalWorkerDeploymentName?: string | null;
+  temporalWorkerBuildId?: string | null;
 };
 
 type JobRow = {
@@ -80,9 +87,12 @@ type JobRow = {
   model: string | null;
   size: string | null;
   quality: string | null;
+  temporal_worker_deployment_name: string | null;
+  temporal_worker_build_id: string | null;
   error: string | null;
   created_at: string;
   updated_at: string;
+  shared_at: string | null;
 };
 
 const JOBS_BUCKET = process.env.WEDDING_SNAP_STORAGE_BUCKET ?? "wedding-snap-jobs";
@@ -165,6 +175,9 @@ export async function createGenerateJob(params: CreateGenerateJobParams) {
       input_male_mime_type: maleMimeType,
       input_female_object_path: femaleObjectPath,
       input_female_mime_type: femaleMimeType,
+      temporal_worker_deployment_name:
+        params.temporalWorkerDeploymentName ?? null,
+      temporal_worker_build_id: params.temporalWorkerBuildId ?? null,
     })
     .select("*")
     .single();
@@ -209,6 +222,10 @@ export async function markJobRunning(jobId: string) {
     status: "running",
     error: null,
   });
+}
+
+export async function markJobShared(jobId: string) {
+  await updateJobRecord(jobId, { shared_at: new Date().toISOString() });
 }
 
 export async function markJobSucceeded(jobId: string, result: GenerateJobResult) {
@@ -390,6 +407,11 @@ function rowToRecord(row: JobRow): GenerateJobRecord {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    sharedAt: row.shared_at,
+    temporalWorker: {
+      deploymentName: row.temporal_worker_deployment_name,
+      buildId: row.temporal_worker_build_id,
+    },
     access: {
       mode: row.access_mode,
       requiresWatermark: row.requires_watermark,

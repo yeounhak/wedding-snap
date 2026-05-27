@@ -3,6 +3,7 @@ import "dotenv/config";
 import { loadClientConnectConfig } from "@temporalio/envconfig";
 import { NativeConnection, Worker } from "@temporalio/worker";
 
+import { resolveTemporalWorkerDeploymentVersion } from "../app/_lib/temporal-versioning";
 import * as activities from "./activities";
 
 const TASK_QUEUE =
@@ -10,6 +11,7 @@ const TASK_QUEUE =
 
 async function main() {
   const config = loadClientConnectConfig();
+  const deploymentVersion = resolveTemporalWorkerDeploymentVersion();
   const connection = await NativeConnection.connect(config.connectionOptions);
   const worker = await Worker.create({
     connection,
@@ -17,9 +19,27 @@ async function main() {
     taskQueue: TASK_QUEUE,
     workflowsPath: require.resolve("./workflows"),
     activities,
+    ...(deploymentVersion
+      ? {
+          workerDeploymentOptions: {
+            useWorkerVersioning: true,
+            version: deploymentVersion,
+            defaultVersioningBehavior: "PINNED" as const,
+          },
+        }
+      : {}),
+    shutdownGraceTime: "8 minutes",
   });
 
-  console.log(`Temporal worker polling task queue: ${TASK_QUEUE}`);
+  console.log(
+    JSON.stringify({
+      event: "temporal_worker_polling",
+      taskQueue: TASK_QUEUE,
+      namespace: config.namespace,
+      deploymentName: deploymentVersion?.deploymentName,
+      buildId: deploymentVersion?.buildId,
+    }),
+  );
   await worker.run();
 }
 

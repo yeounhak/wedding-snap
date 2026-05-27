@@ -48,9 +48,55 @@ WEDDING_SNAP_CREDIT_PACK_AMOUNT=3900
 WEDDING_SNAP_CREDIT_PACK_CREDITS=5
 ```
 
+Temporal worker deployment variables:
+
+```bash
+TEMPORAL_TASK_QUEUE=wedding-snap-image-generation
+TEMPORAL_WORKER_VERSIONING=off
+TEMPORAL_WORKER_DEPLOYMENT_NAME=wedding-snap-worker
+APP_BUILD_ID=
+```
+
+Local development should normally keep `TEMPORAL_WORKER_VERSIONING=off`. In
+production, set `TEMPORAL_WORKER_VERSIONING=required` for both Vercel and the
+worker VM. Vercel should expose system environment variables so
+`VERCEL_GIT_COMMIT_SHA` is available at runtime; the VM deployment injects the
+same value as `APP_BUILD_ID`.
+
 Anonymous users can generate one watermarked image per device quota window.
 Kakao login can unlock that same device's anonymous result once without another
 OpenAI generation. Paid users spend one credit per clean generation.
+
+## Worker CI/CD
+
+Vercel continues to deploy the Next.js app from `main`. The Temporal worker is
+deployed by `.github/workflows/worker.yml`:
+
+1. build and typecheck the worker image from `Dockerfile.worker`
+2. push the image to Google Artifact Registry as `${GITHUB_SHA}` and `main`
+3. copy `scripts/deploy-worker-vm.sh` to the GCE worker VM
+4. start a SHA-specific Podman/systemd worker service
+5. promote that SHA with `temporal worker deployment set-current-version`
+
+Required GitHub repository variables:
+
+```bash
+GCP_PROJECT_ID=
+GCP_REGION=asia-northeast3
+GCP_ARTIFACT_REPOSITORY=wedding-snap
+GCP_WORKER_VM_NAME=
+GCP_WORKER_VM_ZONE=
+GCP_WORKLOAD_IDENTITY_PROVIDER=
+GCP_SERVICE_ACCOUNT=
+TEMPORAL_WORKER_DEPLOYMENT_NAME=wedding-snap-worker
+WEDDING_SNAP_WORKER_ENV_FILE=/etc/wedding-snap/worker.env
+WEDDING_SNAP_WORKER_KEEP_VERSIONS=3
+```
+
+The worker VM must have Podman, Google Cloud CLI, Temporal CLI, and
+`/etc/wedding-snap/worker.env`. That env file contains runtime secrets such as
+Temporal, Supabase, and OpenAI credentials, but should not contain
+`APP_BUILD_ID`; the deploy script sets it per commit.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

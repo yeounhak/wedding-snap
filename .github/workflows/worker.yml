@@ -1,0 +1,110 @@
+name: Worker
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION || 'asia-northeast3' }}
+  GCP_ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY || 'wedding-snap' }}
+  GCP_WORKER_VM_NAME: ${{ vars.GCP_WORKER_VM_NAME }}
+  GCP_WORKER_VM_ZONE: ${{ vars.GCP_WORKER_VM_ZONE }}
+  TEMPORAL_WORKER_DEPLOYMENT_NAME: ${{ vars.TEMPORAL_WORKER_DEPLOYMENT_NAME || 'wedding-snap-worker' }}
+  WEDDING_SNAP_WORKER_ENV_FILE: ${{ vars.WEDDING_SNAP_WORKER_ENV_FILE || '/etc/wedding-snap/worker.env' }}
+  WEDDING_SNAP_WORKER_KEEP_VERSIONS: ${{ vars.WEDDING_SNAP_WORKER_KEEP_VERSIONS || '3' }}
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.29.3 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck worker
+        run: pnpm worker:typecheck
+
+      - name: Build worker image
+        run: |
+          docker build \
+            --file Dockerfile.worker \
+            --build-arg APP_BUILD_ID="${GITHUB_SHA}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "wedding-snap-worker:${GITHUB_SHA}" \
+            .
+
+      - id: auth
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Push image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          registry_host="${GCP_REGION}-docker.pkg.dev"
+          image="${registry_host}/${GCP_PROJECT_ID}/${GCP_ARTIFACT_REPOSITORY}/worker"
+
+          gcloud auth configure-docker "${registry_host}" --quiet
+          docker tag "wedding-snap-worker:${GITHUB_SHA}" "${image}:${GITHUB_SHA}"
+          docker tag "wedding-snap-worker:${GITHUB_SHA}" "${image}:main"
+          docker push "${image}:${GITHUB_SHA}"
+          docker push "${image}:main"
+
+          echo "image=${image}:${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy worker VM
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          chmod +x scripts/deploy-worker-vm.sh
+          gcloud compute scp scripts/deploy-worker-vm.sh \
+            "${GCP_WORKER_VM_NAME}:/tmp/wedding-snap-deploy-worker.sh" \
+            --project "${GCP_PROJECT_ID}" \
+            --zone "${GCP_WORKER_VM_ZONE}" \
+            --quiet
+
+          remote_env=$(printf \
+            "IMAGE=%q BUILD_ID=%q TEMPORAL_WORKER_DEPLOYMENT_NAME=%q WEDDING_SNAP_WORKER_ENV_FILE=%q WEDDING_SNAP_WORKER_KEEP_VERSIONS=%q" \
+            "${{ steps.image.outputs.image }}" \
+            "${GITHUB_SHA}" \
+            "${TEMPORAL_WORKER_DEPLOYMENT_NAME}" \
+            "${WEDDING_SNAP_WORKER_ENV_FILE}" \
+            "${WEDDING_SNAP_WORKER_KEEP_VERSIONS}")
+
+          gcloud compute ssh "${GCP_WORKER_VM_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --zone "${GCP_WORKER_VM_ZONE}" \
+            --command "sudo env ${remote_env} bash /tmp/wedding-snap-deploy-worker.sh" \
+            --quiet

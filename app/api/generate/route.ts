@@ -18,7 +18,10 @@ import {
   refundCreditReservation,
   validateGenerateInputFiles,
 } from "@/app/_lib/generate-jobs";
-import { startGenerateWorkflow } from "@/app/_lib/temporal";
+import {
+  resolveGenerateWorkflowVersioning,
+  startGenerateWorkflow,
+} from "@/app/_lib/temporal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +70,7 @@ export async function POST(request: NextRequest) {
     null;
   let record;
   try {
+    const workflowVersioning = resolveGenerateWorkflowVersioning();
     const access = await reserveGenerateAccess({
       user,
       deviceHash: device.deviceHash,
@@ -99,8 +103,11 @@ export async function POST(request: NextRequest) {
       ipPrefixHash,
       quotaWindowId: access.quotaWindowId,
       creditLedgerId: access.creditLedgerId,
+      temporalWorkerDeploymentName:
+        workflowVersioning.deploymentVersion?.deploymentName,
+      temporalWorkerBuildId: workflowVersioning.deploymentVersion?.buildId,
     });
-    await startGenerateWorkflow(record.id);
+    await startGenerateWorkflow(record.id, workflowVersioning);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "이미지 생성 작업을 시작하지 못했습니다";
