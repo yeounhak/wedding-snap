@@ -128,7 +128,7 @@ if [[ -n "${TEMPORAL_API_KEY:-}" ]]; then
 fi
 
 deployment_visible=false
-for _ in {1..24}; do
+for _ in {1..60}; do
   if "${TEMPORAL_BIN}" "${temporal_args[@]}" worker deployment describe-version \
     --deployment-name "${DEPLOYMENT_NAME}" \
     --build-id "${BUILD_ID}" >/dev/null 2>&1; then
@@ -146,7 +146,8 @@ fi
 
 "${TEMPORAL_BIN}" "${temporal_args[@]}" worker deployment set-current-version \
   --deployment-name "${DEPLOYMENT_NAME}" \
-  --build-id "${BUILD_ID}"
+  --build-id "${BUILD_ID}" \
+  --yes
 
 mapfile -t unit_paths < <(ls -1t /etc/systemd/system/wedding-snap-worker-*.service 2>/dev/null || true)
 index=0
