@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { shareResultPhoto } from "@/app/_lib/share-result";
-import { startCreditPurchase } from "@/app/_lib/toss-payments";
 
 type Props = {
   ref?: React.Ref<HTMLElement>;
@@ -168,18 +167,10 @@ export default function GenerateSection({
     window.location.assign("/api/auth/kakao/login");
   };
 
-  const purchaseCredits = async () => {
+  const purchaseCredits = () => {
     setPaymentWorking(true);
     setError(null);
-    try {
-      // Navigates to the Toss payment window on success (does not resolve here).
-      await startCreditPurchase();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "결제를 시작하지 못했습니다");
-      setStatus("error");
-      setErrorAction("purchase");
-      setPaymentWorking(false);
-    }
+    window.location.assign("/me/credits");
   };
 
   const shareResult = async () => {

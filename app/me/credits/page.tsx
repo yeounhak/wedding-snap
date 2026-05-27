@@ -5,11 +5,13 @@ import { redirect } from "next/navigation";
 import { getCreditBalance, getCurrentUser } from "@/app/_lib/access-control";
 import {
   getCreditProduct,
+  getTossClientKey,
+  getTossCustomerKey,
   listCreditHistory,
   type CreditHistoryItem,
 } from "@/app/_lib/payments";
 
-import ChargeButton from "./_components/ChargeButton";
+import PaymentWidgetCheckout from "./_components/PaymentWidgetCheckout";
 import PaymentNotice from "./_components/PaymentNotice";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +46,8 @@ export default async function CreditsPage({
   const sp = await searchParams;
   const payment = typeof sp.payment === "string" ? sp.payment : null;
   const reason = typeof sp.reason === "string" ? sp.reason : undefined;
+  const tossClientKey = getTossClientKey();
+  const tossCustomerKey = getTossCustomerKey(user.id);
 
   return (
     <main
@@ -102,7 +106,13 @@ export default async function CreditsPage({
               ₩{product.amount.toLocaleString("ko-KR")}
             </p>
           </div>
-          <ChargeButton returnTo="/me/credits" />
+          <PaymentWidgetCheckout
+            returnTo="/me/credits"
+            clientKey={tossClientKey}
+            customerKey={tossCustomerKey}
+            amount={product.amount}
+            currency={product.currency}
+          />
           <p className="mt-3 text-center text-[12px] text-neutral-400">
             결제 시{" "}
             <Link href="/legal/refund" className="underline underline-offset-2">

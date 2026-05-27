@@ -43,7 +43,9 @@ export function getCreditProduct(): CreditProduct {
 export function getTossClientKey() {
   const key = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY;
   if (!key) {
-    throw new Error("NEXT_PUBLIC_TOSS_CLIENT_KEY is not set");
+    throw new Error(
+      "NEXT_PUBLIC_TOSS_CLIENT_KEY (Toss payment-widget client key) is not set",
+    );
   }
   return key;
 }
@@ -51,7 +53,7 @@ export function getTossClientKey() {
 export function getTossSecretKey() {
   const key = process.env.TOSS_SECRET_KEY;
   if (!key) {
-    throw new Error("TOSS_SECRET_KEY is not set");
+    throw new Error("TOSS_SECRET_KEY (Toss payment-widget secret key) is not set");
   }
   return key;
 }

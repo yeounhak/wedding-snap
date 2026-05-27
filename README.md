@@ -32,9 +32,14 @@ SUPABASE_SECRET_KEY=
 KAKAO_REST_API_KEY=
 KAKAO_CLIENT_SECRET=
 OPENAI_API_KEY=
-TOSS_SECRET_KEY=
 NEXT_PUBLIC_TOSS_CLIENT_KEY=
+TOSS_SECRET_KEY=
 ```
+
+`NEXT_PUBLIC_TOSS_CLIENT_KEY` and `TOSS_SECRET_KEY` must be the Toss Payments
+payment-widget integration keys, not the API individual integration keys. The
+credit page renders the payment-widget order form in-page before requesting the
+final Toss payment.
 
 Optional policy/product variables:
 
