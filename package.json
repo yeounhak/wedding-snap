@@ -11,6 +11,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "@temporalio/client": "^1.16.2",
     "@temporalio/envconfig": "^1.16.2",

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { SAMPLES } from "../_lib/samples";
+import AuthButton from "./AuthButton";
 
 type Props = {
   ref?: React.Ref<HTMLElement>;
@@ -61,6 +62,9 @@ export default function LandingSection({ ref, onStart }: Props) {
         <span className="text-[17px] font-semibold tracking-tight text-neutral-900">
           Wedding Snap
         </span>
+        <div className="ml-auto">
+          <AuthButton />
+        </div>
       </header>
 
       <div
