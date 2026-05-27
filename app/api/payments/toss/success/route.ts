@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/app/_lib/access-control";
 import {
   confirmTossPayment,
   findPaymentOrder,
+  getSafeReturnTo,
   grantCreditsForPaidOrder,
   markPaymentOrderFailed,
 } from "@/app/_lib/payments";
@@ -14,7 +15,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
-  const redirectUrl = new URL("/", url.origin);
+  const returnTo = getSafeReturnTo(url.searchParams.get("returnTo"));
+  const redirectUrl = new URL(returnTo ?? "/", url.origin);
   const paymentKey = url.searchParams.get("paymentKey");
   const orderId = url.searchParams.get("orderId");
   const amountParam = url.searchParams.get("amount");

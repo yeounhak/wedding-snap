@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SAMPLES } from "../_lib/samples";
 import AuthButton from "./AuthButton";
@@ -153,6 +154,18 @@ export default function LandingSection({ ref, onStart }: Props) {
             </svg>
           </div>
         </button>
+        <nav className="flex items-center gap-2 text-[11px] text-neutral-400">
+          <Link href="/legal/terms" className="underline-offset-2 hover:underline">
+            이용약관
+          </Link>
+          <span className="text-neutral-300">·</span>
+          <Link
+            href="/legal/privacy"
+            className="underline-offset-2 hover:underline"
+          >
+            개인정보처리방침
+          </Link>
+        </nav>
       </div>
     </section>
   );

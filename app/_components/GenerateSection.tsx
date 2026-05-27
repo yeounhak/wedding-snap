@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { shareResultPhoto } from "@/app/_lib/share-result";
+import { startCreditPurchase } from "@/app/_lib/toss-payments";
+
 type Props = {
   ref?: React.Ref<HTMLElement>;
   active: boolean;
@@ -30,17 +33,6 @@ type GenerateErrorResponse = {
   creditsRemaining?: number;
 };
 
-type PaymentOrderResponse = {
-  orderId: string;
-  orderName: string;
-  amount: number;
-  currency: "KRW";
-  customerKey: string;
-  clientKey: string;
-  successUrl: string;
-  failUrl: string;
-};
-
 type ErrorAction = "login" | "purchase" | null;
 
 const PROGRESS_MESSAGES = [
@@ -65,6 +57,8 @@ export default function GenerateSection({
   const [errorAction, setErrorAction] = useState<ErrorAction>(null);
   const [msgIdx, setMsgIdx] = useState(0);
   const [paymentWorking, setPaymentWorking] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
   const triggeredRef = useRef(false);
   const generationSeqRef = useRef(0);
   const hasInputs = Boolean(male && female);
@@ -178,21 +172,29 @@ export default function GenerateSection({
     setPaymentWorking(true);
     setError(null);
     try {
-      const orderResponse = await fetch("/api/payments/toss/orders", {
-        method: "POST",
-      });
-      if (!orderResponse.ok) {
-        const data = (await orderResponse.json().catch(() => ({}))) as GenerateErrorResponse;
-        throw new Error(data.error ?? `결제 요청 실패 (${orderResponse.status})`);
-      }
-
-      const order = (await orderResponse.json()) as PaymentOrderResponse;
-      await requestTossPayment(order);
+      // Navigates to the Toss payment window on success (does not resolve here).
+      await startCreditPurchase();
     } catch (err) {
       setError(err instanceof Error ? err.message : "결제를 시작하지 못했습니다");
       setStatus("error");
       setErrorAction("purchase");
       setPaymentWorking(false);
+    }
+  };
+
+  const shareResult = async () => {
+    if (!job?.jobId) return;
+    setSharing(true);
+    setShareNotice(null);
+    try {
+      const outcome = await shareResultPhoto(job.jobId);
+      if (outcome?.method === "copy") {
+        setShareNotice("공유 링크를 복사했어요");
+      }
+    } catch (err) {
+      setShareNotice(err instanceof Error ? err.message : "공유하지 못했어요");
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -266,6 +268,33 @@ export default function GenerateSection({
               </svg>
               사진 저장하기
             </a>
+            <button
+              type="button"
+              onClick={shareResult}
+              disabled={sharing}
+              className="w-full max-w-xs h-11 rounded-full border border-neutral-200 text-neutral-700 font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition disabled:opacity-60"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+              </svg>
+              {sharing ? "공유 준비 중" : "공유하기"}
+            </button>
+            {shareNotice ? (
+              <p className="text-[12px] text-neutral-500">{shareNotice}</p>
+            ) : null}
             {job?.watermarkRequired ? (
               <button
                 type="button"
@@ -361,62 +390,4 @@ async function pollJob(jobId: string, isCurrent: () => boolean) {
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function requestTossPayment(order: PaymentOrderResponse) {
-  await loadTossPaymentsSdk();
-  if (!window.TossPayments) {
-    throw new Error("토스페이먼츠 SDK를 불러오지 못했습니다");
-  }
-
-  const tossPayments = window.TossPayments(order.clientKey);
-  const payment = tossPayments.payment({ customerKey: order.customerKey });
-  await payment.requestPayment({
-    method: "CARD",
-    amount: { value: order.amount, currency: order.currency },
-    orderId: order.orderId,
-    orderName: order.orderName,
-    successUrl: order.successUrl,
-    failUrl: order.failUrl,
-  });
-}
-
-async function loadTossPaymentsSdk() {
-  if (window.TossPayments) return;
-
-  await new Promise<void>((resolve, reject) => {
-    const existing = document.getElementById("toss-payments-sdk");
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("SDK load failed")), {
-        once: true,
-      });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = "toss-payments-sdk";
-    script.src = "https://js.tosspayments.com/v2/standard";
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("SDK load failed"));
-    document.head.appendChild(script);
-  });
-}
-
-declare global {
-  interface Window {
-    TossPayments?: (clientKey: string) => {
-      payment: (params: { customerKey: string }) => {
-        requestPayment: (params: {
-          method: "CARD";
-          amount: { value: number; currency: "KRW" };
-          orderId: string;
-          orderName: string;
-          successUrl: string;
-          failUrl: string;
-        }) => Promise<void>;
-      };
-    };
-  }
 }

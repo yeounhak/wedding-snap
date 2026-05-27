@@ -18,6 +18,15 @@ export type TossConfirmResponse = {
   [key: string]: unknown;
 };
 
+export type CreditHistoryItem = {
+  id: string;
+  delta: number;
+  reason: "purchase" | "generation_reserve" | "generation_refund" | "manual";
+  createdAt: string;
+  /** KRW paid, present for purchase rows. */
+  amount?: number;
+};
+
 export function getCreditProduct(): CreditProduct {
   return {
     sku: process.env.WEDDING_SNAP_CREDIT_PACK_SKU ?? "wedding-snap-credit-5",
@@ -58,6 +67,7 @@ export function getTossCustomerKey(userId: string) {
 export async function createPaymentOrder(params: {
   userId: string;
   origin: string;
+  returnTo?: string;
 }) {
   const product = getCreditProduct();
   const clientKey = getTossClientKey();
@@ -84,8 +94,14 @@ export async function createPaymentOrder(params: {
     creditAmount: product.creditAmount,
     customerKey: getTossCustomerKey(params.userId),
     clientKey,
-    successUrl: `${params.origin}/api/payments/toss/success`,
-    failUrl: `${params.origin}/api/payments/toss/fail`,
+    successUrl: appendReturnTo(
+      `${params.origin}/api/payments/toss/success`,
+      getSafeReturnTo(params.returnTo),
+    ),
+    failUrl: appendReturnTo(
+      `${params.origin}/api/payments/toss/fail`,
+      getSafeReturnTo(params.returnTo),
+    ),
   };
 }
 
@@ -177,4 +193,68 @@ export async function grantCreditsForPaidOrder(params: {
 function parsePositiveInt(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export async function listCreditHistory(
+  userId: string,
+  limit = 50,
+): Promise<CreditHistoryItem[]> {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("generation_credits")
+    .select("id, delta, reason, order_id, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{
+    id: string;
+    delta: number;
+    reason: CreditHistoryItem["reason"];
+    order_id: string | null;
+    created_at: string;
+  }>;
+
+  const purchaseOrderIds = rows
+    .filter((row) => row.reason === "purchase" && row.order_id)
+    .map((row) => row.order_id as string);
+
+  const amounts = new Map<string, number>();
+  if (purchaseOrderIds.length > 0) {
+    const { data: orders, error: ordersError } = await admin
+      .from("payment_orders")
+      .select("order_id, amount")
+      .in("order_id", purchaseOrderIds);
+
+    if (ordersError) throw ordersError;
+    for (const order of orders ?? []) {
+      amounts.set(order.order_id as string, order.amount as number);
+    }
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    delta: row.delta,
+    reason: row.reason,
+    createdAt: row.created_at,
+    amount:
+      row.reason === "purchase" && row.order_id
+        ? amounts.get(row.order_id)
+        : undefined,
+  }));
+}
+
+export function getSafeReturnTo(value: string | null | undefined) {
+  if (!value) return null;
+  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
+}
+
+function appendReturnTo(baseUrl: string, returnTo: string | null) {
+  if (!returnTo) return baseUrl;
+  const url = new URL(baseUrl);
+  url.searchParams.set("returnTo", returnTo);
+  return url.toString();
 }

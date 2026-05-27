@@ -18,9 +18,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const body = (await request.json().catch(() => ({}))) as {
+    returnTo?: unknown;
+  };
+  const returnTo =
+    typeof body.returnTo === "string" ? body.returnTo : undefined;
+
   const order = await createPaymentOrder({
     userId: user.id,
     origin: request.nextUrl.origin,
+    returnTo,
   });
 
   return Response.json(order, { status: 201 });

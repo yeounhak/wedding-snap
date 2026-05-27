@@ -40,7 +40,7 @@ export async function GET(
     );
   }
 
-  if (!wantsClean && !canReadAny) {
+  if (!wantsClean && !canReadAny && !record.sharedAt) {
     return Response.json(
       { error: "이미지를 볼 권한이 없습니다" },
       { status: 403 },
