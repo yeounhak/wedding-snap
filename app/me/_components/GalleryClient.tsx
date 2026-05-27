@@ -166,9 +166,26 @@ function AccountFooter({
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 truncate text-[13px] text-neutral-500">
-          {userLabel}
-        </span>
+        <Link
+          href="/me/account"
+          className="min-w-0 flex items-center gap-1 text-[13px] text-neutral-500 active:opacity-70"
+        >
+          <span className="truncate">{userLabel}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="shrink-0 text-neutral-300"
+            aria-hidden="true"
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </Link>
         <button
           type="button"
           onClick={onSignOut}
