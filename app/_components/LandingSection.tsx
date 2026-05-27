@@ -1,10 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SAMPLES } from "../_lib/samples";
-import AuthButton from "./AuthButton";
 
 type Props = {
   ref?: React.Ref<HTMLElement>;
@@ -34,40 +32,8 @@ export default function LandingSection({ ref, onStart }: Props) {
       ref={ref}
       data-idx="0"
       className="snap-start snap-always h-[100dvh] w-full flex flex-col items-center bg-white"
+      style={{ paddingTop: "calc(max(env(safe-area-inset-top), 1rem) + 3rem)" }}
     >
-      <header
-        className="w-full px-6 pb-3 flex items-center gap-2.5"
-        style={{ paddingTop: "max(env(safe-area-inset-top), 1rem)" }}
-      >
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[11px] bg-neutral-900 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.3)]">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect x="3" y="7" width="18" height="13" rx="3.5" />
-            <path d="M8.6 7 9.7 5h4.6l1.1 2" />
-            <path
-              d="M12 17.2c-1.6-1-2.6-1.9-2.6-3.1 0-.85.66-1.5 1.5-1.5.5 0 .95.24 1.1.6.15-.36.6-.6 1.1-.6.84 0 1.5.65 1.5 1.5 0 1.2-1 2.1-2.6 3.1Z"
-              fill="white"
-              stroke="none"
-            />
-          </svg>
-        </span>
-        <span className="text-[17px] font-semibold tracking-tight text-neutral-900">
-          Wedding Snap
-        </span>
-        <div className="ml-auto">
-          <AuthButton />
-        </div>
-      </header>
-
       <div
         ref={swipeRef}
         className="flex-1 w-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar"
@@ -154,18 +120,6 @@ export default function LandingSection({ ref, onStart }: Props) {
             </svg>
           </div>
         </button>
-        <nav className="flex items-center gap-2 text-[11px] text-neutral-400">
-          <Link href="/legal/terms" className="underline-offset-2 hover:underline">
-            이용약관
-          </Link>
-          <span className="text-neutral-300">·</span>
-          <Link
-            href="/legal/privacy"
-            className="underline-offset-2 hover:underline"
-          >
-            개인정보처리방침
-          </Link>
-        </nav>
       </div>
     </section>
   );

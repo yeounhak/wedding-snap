@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { shareResultPhoto } from "@/app/_lib/share-result";
@@ -195,11 +196,11 @@ export default function GenerateSection({
       data-idx="2"
       className="snap-start snap-always h-[100dvh] w-full flex flex-col bg-white"
       style={{
-        paddingTop: "env(safe-area-inset-top)",
+        paddingTop: "calc(max(env(safe-area-inset-top), 1rem) + 3rem)",
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <div className="px-6 pt-8 pb-3">
+      <div className="px-6 pt-4 pb-3">
         <h2 className="text-2xl font-semibold tracking-tight">
           {displayStatus === "success"
             ? "두 분의 웨딩 사진이에요"
@@ -239,7 +240,7 @@ export default function GenerateSection({
         </div>
       </div>
 
-      <div className="px-6 pt-5 pb-6 flex flex-col items-center gap-2.5">
+      <div className="px-6 pt-5 pb-3 flex flex-col items-center gap-2.5">
         {displayStatus === "success" && displayResult ? (
           <>
             <a
@@ -352,6 +353,16 @@ export default function GenerateSection({
           <p className="text-xs text-neutral-400">잠시만 기다려주세요</p>
         )}
       </div>
+
+      <nav className="px-6 pb-5 flex items-center justify-center gap-2 text-[11px] text-neutral-400">
+        <Link href="/legal/terms" className="underline-offset-2 hover:underline">
+          이용약관
+        </Link>
+        <span className="text-neutral-300">·</span>
+        <Link href="/legal/privacy" className="underline-offset-2 hover:underline">
+          개인정보처리방침
+        </Link>
+      </nav>
     </section>
   );
 }

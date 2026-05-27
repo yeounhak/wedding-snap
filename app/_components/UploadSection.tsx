@@ -39,11 +39,11 @@ export default function UploadSection({
       data-idx="1"
       className="snap-start snap-always h-[100dvh] w-full flex flex-col bg-white"
       style={{
-        paddingTop: "env(safe-area-inset-top)",
+        paddingTop: "calc(max(env(safe-area-inset-top), 1rem) + 3rem)",
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <div className="px-6 pt-10 pb-3">
+      <div className="px-6 pt-4 pb-3">
         <h2 className="text-[26px] font-semibold tracking-tight leading-snug">
           두 분의 사진을
           <br />
@@ -110,7 +110,7 @@ function UploadSlot({
   return (
     <label
       htmlFor={id}
-      className={`relative shrink-0 w-full max-w-[220px] aspect-[4/5] rounded-[28px] overflow-hidden cursor-pointer transition-all duration-300 ${
+      className={`relative min-h-0 w-full max-w-[220px] aspect-[4/5] rounded-[28px] overflow-hidden cursor-pointer transition-all duration-300 ${
         preview
           ? "ring-1 ring-neutral-900/10 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.18)]"
           : `${toneBg} ring-1 ring-neutral-200/70 active:scale-[0.99]`

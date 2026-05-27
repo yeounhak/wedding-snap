@@ -40,15 +40,6 @@ export default function AuthButton() {
     window.location.assign("/api/auth/kakao/login");
   };
 
-  const signOut = async () => {
-    setWorking(true);
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error(error);
-      setWorking(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="h-9 w-[88px] rounded-full bg-neutral-100 shimmer" />
@@ -57,40 +48,33 @@ export default function AuthButton() {
 
   if (session) {
     return (
-      <div className="flex items-center gap-2">
-        <Link
-          href="/me"
-          aria-label="내 사진"
-          title="내 사진"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white/85 text-neutral-700 shadow-sm backdrop-blur-sm active:scale-[0.98]"
+      <Link
+        href="/me"
+        aria-label="내 사진 보기"
+        title="내 사진"
+        className="inline-flex h-9 max-w-[160px] items-center gap-1.5 rounded-full border border-neutral-200 bg-white/85 pl-2.5 pr-3 text-neutral-700 shadow-sm backdrop-blur-sm active:scale-[0.98]"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="shrink-0"
         >
-          <svg
-            width="17"
-            height="17"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect x="3" y="3" width="7" height="7" rx="1.6" />
-            <rect x="14" y="3" width="7" height="7" rx="1.6" />
-            <rect x="3" y="14" width="7" height="7" rx="1.6" />
-            <rect x="14" y="14" width="7" height="7" rx="1.6" />
-          </svg>
-        </Link>
-        <button
-          type="button"
-          onClick={signOut}
-          disabled={working}
-          className="min-w-0 max-w-[120px] h-9 px-3 rounded-full border border-neutral-200 bg-white/85 text-[12px] font-medium text-neutral-700 shadow-sm backdrop-blur-sm active:scale-[0.98] disabled:opacity-60"
-          title="로그아웃"
-        >
-          <span className="block truncate">{getUserLabel(session)}</span>
-        </button>
-      </div>
+          <rect x="3" y="3" width="7" height="7" rx="1.6" />
+          <rect x="14" y="3" width="7" height="7" rx="1.6" />
+          <rect x="3" y="14" width="7" height="7" rx="1.6" />
+          <rect x="14" y="14" width="7" height="7" rx="1.6" />
+        </svg>
+        <span className="block truncate text-[12px] font-medium">
+          {getUserLabel(session)}
+        </span>
+      </Link>
     );
   }
 
