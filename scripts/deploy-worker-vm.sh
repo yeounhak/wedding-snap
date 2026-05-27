@@ -34,6 +34,18 @@ set -a
 . "${ENV_FILE}"
 set +a
 
+strip_trailing_cr() {
+  local var_name="$1"
+  if [[ -v "${var_name}" ]]; then
+    printf -v "${var_name}" '%s' "${!var_name%$'\r'}"
+    export "${var_name}"
+  fi
+}
+
+strip_trailing_cr TEMPORAL_ADDRESS
+strip_trailing_cr TEMPORAL_NAMESPACE
+strip_trailing_cr TEMPORAL_API_KEY
+
 registry_host="${IMAGE%%/*}"
 registry_token=""
 if command -v gcloud >/dev/null 2>&1; then
@@ -111,12 +123,16 @@ fi
 if [[ -n "${TEMPORAL_NAMESPACE:-}" ]]; then
   temporal_args+=(--namespace "${TEMPORAL_NAMESPACE}")
 fi
+if [[ -n "${TEMPORAL_API_KEY:-}" ]]; then
+  temporal_args+=(--tls)
+fi
 
 deployment_visible=false
-for _ in {1..24}; do
-  if "${TEMPORAL_BIN}" "${temporal_args[@]}" worker deployment describe-version \
+for _ in {1..60}; do
+  if "${TEMPORAL_BIN}" worker deployment describe-version \
     --deployment-name "${DEPLOYMENT_NAME}" \
-    --build-id "${BUILD_ID}" >/dev/null 2>&1; then
+    --build-id "${BUILD_ID}" \
+    "${temporal_args[@]}" >/dev/null 2>&1; then
     deployment_visible=true
     break
   fi
@@ -129,9 +145,11 @@ if [[ "${deployment_visible}" != "true" ]]; then
   exit 1
 fi
 
-"${TEMPORAL_BIN}" "${temporal_args[@]}" worker deployment set-current-version \
+"${TEMPORAL_BIN}" worker deployment set-current-version \
   --deployment-name "${DEPLOYMENT_NAME}" \
-  --build-id "${BUILD_ID}"
+  --build-id "${BUILD_ID}" \
+  --yes \
+  "${temporal_args[@]}"
 
 mapfile -t unit_paths < <(ls -1t /etc/systemd/system/wedding-snap-worker-*.service 2>/dev/null || true)
 index=0
