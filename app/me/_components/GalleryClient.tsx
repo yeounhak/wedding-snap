@@ -33,8 +33,8 @@ export default function GalleryClient({ items, credits, userLabel }: Props) {
     >
       <header className="px-5 pb-3 flex items-center gap-3">
         <Link
-          href="/"
-          aria-label="홈으로"
+          href="/welcome"
+          aria-label="새로 만들기"
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-200 text-neutral-700 active:scale-95 transition"
         >
           <svg
@@ -142,7 +142,7 @@ function EmptyState() {
         </p>
       </div>
       <Link
-        href="/"
+        href="/welcome"
         className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium flex items-center justify-center active:scale-[0.98] transition"
       >
         사진 만들러 가기

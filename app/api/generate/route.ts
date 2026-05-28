@@ -40,14 +40,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const male = formData.get("male");
-  const female = formData.get("female");
-  if (!(male instanceof File) || !(female instanceof File)) {
+  const maleField = formData.get("male");
+  const femaleField = formData.get("female");
+  const male = maleField instanceof File ? maleField : null;
+  const female = femaleField instanceof File ? femaleField : null;
+  if (!male && !female) {
     return withDeviceCookie(
       request,
       device,
       NextResponse.json(
-        { error: "남자 사진과 여자 사진이 모두 필요합니다" },
+        { error: "신부 또는 신랑 사진 중 적어도 한 장이 필요합니다" },
         { status: 400 },
       ),
     );

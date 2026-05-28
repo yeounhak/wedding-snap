@@ -1,5 +1,3 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Agent guide
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+See [CLAUDE.md](./CLAUDE.md) for project conventions, the Next.js 16 caveats, the root routing pattern, the solo-generation contract, and database access notes. Treat CLAUDE.md as the source of truth — anything added here must also be reflected there.

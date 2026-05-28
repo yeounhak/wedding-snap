@@ -6,6 +6,8 @@ export type GenerateJobStatus = "queued" | "running" | "succeeded" | "failed";
 
 export type GenerateJobAccessMode = "anonymous_watermarked" | "credit_clean";
 
+export type GenerateJobSubjectMode = "couple" | "bride" | "groom";
+
 export type GenerateJobRecord = {
   id: string;
   status: GenerateJobStatus;
@@ -26,10 +28,11 @@ export type GenerateJobRecord = {
     creditLedgerId: string | null;
   };
   input: {
-    maleObjectPath: string;
-    maleMimeType: string;
-    femaleObjectPath: string;
-    femaleMimeType: string;
+    maleObjectPath: string | null;
+    maleMimeType: string | null;
+    femaleObjectPath: string | null;
+    femaleMimeType: string | null;
+    subjectMode: GenerateJobSubjectMode;
   };
   result?: GenerateJobResult;
   error?: string;
@@ -54,8 +57,8 @@ export type PublicGenerateJob = {
 };
 
 type CreateGenerateJobParams = {
-  male: File;
-  female: File;
+  male: File | null;
+  female: File | null;
   accessMode: GenerateJobAccessMode;
   requiresWatermark: boolean;
   userId?: string | null;
@@ -77,10 +80,10 @@ type JobRow = {
   ip_prefix_hash: string | null;
   quota_window_id: string | null;
   credit_ledger_id: string | null;
-  input_male_object_path: string;
-  input_male_mime_type: string;
-  input_female_object_path: string;
-  input_female_mime_type: string;
+  input_male_object_path: string | null;
+  input_male_mime_type: string | null;
+  input_female_object_path: string | null;
+  input_female_mime_type: string | null;
   clean_object_path: string | null;
   watermarked_object_path: string | null;
   result_mime_type: string | null;
@@ -141,22 +144,42 @@ export function publicJob(
   };
 }
 
-export function validateGenerateInputFiles(files: { male: File; female: File }) {
-  validateInputFile(files.male);
-  validateInputFile(files.female);
+export function validateGenerateInputFiles(files: {
+  male: File | null;
+  female: File | null;
+}) {
+  if (!files.male && !files.female) {
+    throw new Error("신부 또는 신랑 사진 중 적어도 한 장이 필요합니다");
+  }
+  if (files.male) validateInputFile(files.male);
+  if (files.female) validateInputFile(files.female);
 }
 
 export async function createGenerateJob(params: CreateGenerateJobParams) {
   validateGenerateInputFiles({ male: params.male, female: params.female });
 
   const id = randomUUID();
-  const maleMimeType = normalizeMime(params.male.type);
-  const femaleMimeType = normalizeMime(params.female.type);
-  const maleObjectPath = getInputObjectPath(id, "male", maleMimeType);
-  const femaleObjectPath = getInputObjectPath(id, "female", femaleMimeType);
+  const maleMimeType = params.male ? normalizeMime(params.male.type) : null;
+  const femaleMimeType = params.female ? normalizeMime(params.female.type) : null;
+  const maleObjectPath =
+    params.male && maleMimeType
+      ? getInputObjectPath(id, "male", maleMimeType)
+      : null;
+  const femaleObjectPath =
+    params.female && femaleMimeType
+      ? getInputObjectPath(id, "female", femaleMimeType)
+      : null;
 
-  await uploadFileObject(maleObjectPath, params.male, maleMimeType);
-  await uploadFileObject(femaleObjectPath, params.female, femaleMimeType);
+  const uploads: Array<Promise<void>> = [];
+  if (params.male && maleObjectPath && maleMimeType) {
+    uploads.push(uploadFileObject(maleObjectPath, params.male, maleMimeType));
+  }
+  if (params.female && femaleObjectPath && femaleMimeType) {
+    uploads.push(
+      uploadFileObject(femaleObjectPath, params.female, femaleMimeType),
+    );
+  }
+  await Promise.all(uploads);
 
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
@@ -183,7 +206,12 @@ export async function createGenerateJob(params: CreateGenerateJobParams) {
     .single();
 
   if (error) {
-    await deleteJobObjects([maleObjectPath, femaleObjectPath]).catch(() => undefined);
+    const objectsToClean = [maleObjectPath, femaleObjectPath].filter(
+      (path): path is string => path !== null,
+    );
+    if (objectsToClean.length > 0) {
+      await deleteJobObjects(objectsToClean).catch(() => undefined);
+    }
     throw error;
   }
 
@@ -426,10 +454,23 @@ function rowToRecord(row: JobRow): GenerateJobRecord {
       maleMimeType: row.input_male_mime_type,
       femaleObjectPath: row.input_female_object_path,
       femaleMimeType: row.input_female_mime_type,
+      subjectMode: deriveSubjectMode(
+        row.input_male_object_path,
+        row.input_female_object_path,
+      ),
     },
     result,
     error: row.error ?? undefined,
   };
+}
+
+function deriveSubjectMode(
+  maleObjectPath: string | null,
+  femaleObjectPath: string | null,
+): GenerateJobSubjectMode {
+  if (maleObjectPath && femaleObjectPath) return "couple";
+  if (femaleObjectPath) return "bride";
+  return "groom";
 }
 
 function normalizeMime(mimeType: string) {

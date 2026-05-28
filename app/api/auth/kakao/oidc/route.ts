@@ -8,6 +8,8 @@ import {
   getSyntheticKakaoEmail,
   KAKAO_OAUTH_STATE_COOKIE,
   KAKAO_POST_LOGIN_REDIRECT_COOKIE,
+  WEDDING_SNAP_HAS_LOGGED_IN_COOKIE,
+  WEDDING_SNAP_HAS_LOGGED_IN_MAX_AGE,
 } from "@/app/_lib/kakao-auth";
 import {
   createServerSupabaseClient,
@@ -59,6 +61,13 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(redirectUrl);
   response.cookies.delete(KAKAO_OAUTH_STATE_COOKIE);
   response.cookies.delete(KAKAO_POST_LOGIN_REDIRECT_COOKIE);
+  response.cookies.set(WEDDING_SNAP_HAS_LOGGED_IN_COOKIE, "1", {
+    httpOnly: true,
+    maxAge: WEDDING_SNAP_HAS_LOGGED_IN_MAX_AGE,
+    path: "/",
+    sameSite: "lax",
+    secure: request.nextUrl.protocol === "https:",
+  });
   return response;
 }
 

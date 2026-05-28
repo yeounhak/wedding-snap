@@ -18,10 +18,28 @@ import {
   type GenerateJobResult,
 } from "../app/_lib/generate-jobs";
 
-const DEFAULT_PROMPT = [
+const COUPLE_PROMPT = [
   "Create a polished wedding snap portrait based on the two reference photos.",
   "Preserve each person's facial identity and natural features.",
   "Style them as a bride and groom in elegant wedding attire.",
+  "Use soft daylight, refined editorial photography, realistic skin texture, and a romantic outdoor wedding atmosphere.",
+  "Do not add text, logos, watermarks, extra people, distorted hands, or surreal details.",
+].join(" ");
+
+const BRIDE_PROMPT = [
+  "Create a polished solo wedding portrait of the bride based on the reference photo.",
+  "Preserve her facial identity and natural features.",
+  "Style her in an elegant white wedding dress with tasteful bridal styling (subtle veil or bouquet is fine).",
+  "Frame as a single-subject editorial wedding portrait — no second person, no groom.",
+  "Use soft daylight, refined editorial photography, realistic skin texture, and a romantic outdoor wedding atmosphere.",
+  "Do not add text, logos, watermarks, extra people, distorted hands, or surreal details.",
+].join(" ");
+
+const GROOM_PROMPT = [
+  "Create a polished solo wedding portrait of the groom based on the reference photo.",
+  "Preserve his facial identity and natural features.",
+  "Style him in an elegant black tuxedo or formal wedding suit with tasteful groom styling.",
+  "Frame as a single-subject editorial wedding portrait — no second person, no bride.",
   "Use soft daylight, refined editorial photography, realistic skin texture, and a romantic outdoor wedding atmosphere.",
   "Do not add text, logos, watermarks, extra people, distorted hands, or surreal details.",
 ].join(" ");
@@ -58,30 +76,43 @@ export async function generateWeddingImage(jobId: string): Promise<GenerateJobRe
     baseURL: getOpenAIBaseURL(),
   });
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `wedding-snap-${jobId}-`));
-  const malePath = path.join(tempDir, `male${extensionForMime(record.input.maleMimeType)}`);
-  const femalePath = path.join(
-    tempDir,
-    `female${extensionForMime(record.input.femaleMimeType)}`,
-  );
+  const subjectMode = record.input.subjectMode;
+  const downloads: Array<Promise<string>> = [];
+
+  if (record.input.maleObjectPath && record.input.maleMimeType) {
+    const malePath = path.join(
+      tempDir,
+      `male${extensionForMime(record.input.maleMimeType)}`,
+    );
+    downloads.push(
+      downloadJobObject(record.input.maleObjectPath)
+        .then((data) => fs.writeFile(malePath, data))
+        .then(() => malePath),
+    );
+  }
+  if (record.input.femaleObjectPath && record.input.femaleMimeType) {
+    const femalePath = path.join(
+      tempDir,
+      `female${extensionForMime(record.input.femaleMimeType)}`,
+    );
+    downloads.push(
+      downloadJobObject(record.input.femaleObjectPath)
+        .then((data) => fs.writeFile(femalePath, data))
+        .then(() => femalePath),
+    );
+  }
 
   let response;
   try {
-    await Promise.all([
-      downloadJobObject(record.input.maleObjectPath).then((data) =>
-        fs.writeFile(malePath, data),
-      ),
-      downloadJobObject(record.input.femaleObjectPath).then((data) =>
-        fs.writeFile(femalePath, data),
-      ),
-    ]);
+    const imagePaths = await Promise.all(downloads);
+    if (imagePaths.length === 0) {
+      throw new Error("Job has no reference photos");
+    }
 
     response = await openai.images.edit({
       model: MODEL,
-      image: [
-        createReadStream(malePath),
-        createReadStream(femalePath),
-      ],
-      prompt: process.env.WEDDING_SNAP_PROMPT ?? DEFAULT_PROMPT,
+      image: imagePaths.map((p) => createReadStream(p)),
+      prompt: resolvePrompt(subjectMode),
       background: "opaque",
       n: 1,
       output_format: OUTPUT_FORMAT,
@@ -126,6 +157,20 @@ function getOpenAIBaseURL() {
   const baseURL = process.env.OPENAI_BASE_URL?.trim();
   if (!baseURL) return undefined;
   return /^https?:\/\//i.test(baseURL) ? baseURL : `https://${baseURL}`;
+}
+
+function resolvePrompt(subjectMode: "couple" | "bride" | "groom") {
+  if (subjectMode === "bride") {
+    return process.env.WEDDING_SNAP_PROMPT_BRIDE ?? BRIDE_PROMPT;
+  }
+  if (subjectMode === "groom") {
+    return process.env.WEDDING_SNAP_PROMPT_GROOM ?? GROOM_PROMPT;
+  }
+  return (
+    process.env.WEDDING_SNAP_PROMPT_COUPLE ??
+    process.env.WEDDING_SNAP_PROMPT ??
+    COUPLE_PROMPT
+  );
 }
 
 function extensionForMime(mimeType: string) {

@@ -8,6 +8,12 @@ export const KAKAO_POST_LOGIN_REDIRECT_COOKIE =
 export const KAKAO_OIDC_SCOPE = "openid profile_nickname profile_image";
 export const SYNTHETIC_KAKAO_EMAIL_DOMAIN = "users.wedding-snap.invalid";
 
+// Long-lived marker so returning visitors land on /me instead of the
+// marketing landing page. Outlives Supabase session expiry and survives
+// sign-out — only cleared on account deletion.
+export const WEDDING_SNAP_HAS_LOGGED_IN_COOKIE = "wedding_snap_has_logged_in";
+export const WEDDING_SNAP_HAS_LOGGED_IN_MAX_AGE = 60 * 60 * 24 * 365;
+
 type KakaoTokenResponse = {
   access_token?: string;
   id_token?: string;

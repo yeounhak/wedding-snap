@@ -33,6 +33,12 @@ export default function UploadSection({
     return () => clearTimeout(t);
   }, [male, female, onComplete]);
 
+  const soloLabel = !male && female
+    ? "신부 사진만 생성하기"
+    : male && !female
+      ? "신랑 사진만 생성하기"
+      : null;
+
   return (
     <section
       ref={ref}
@@ -45,12 +51,10 @@ export default function UploadSection({
     >
       <div className="px-6 pt-4 pb-3">
         <h2 className="text-[26px] font-semibold tracking-tight leading-snug">
-          두 분의 사진을
-          <br />
-          올려주세요
+          사진을 올려주세요
         </h2>
         <p className="mt-2 text-sm text-neutral-500">
-          얼굴이 잘 보이는 정면 사진이 좋아요
+          한 명만 올려도 만들 수 있어요
         </p>
       </div>
 
@@ -69,11 +73,22 @@ export default function UploadSection({
         />
       </div>
 
-      <div className="px-6 pb-6 text-center">
-        <p className="text-xs text-neutral-400 leading-relaxed">
-          두 장 모두 올리면
-          <br />
-          자동으로 샘플 웨딩 스냅이 만들어져요
+      <div className="px-6 pb-6 flex flex-col items-center gap-2">
+        {soloLabel ? (
+          <button
+            type="button"
+            onClick={onComplete}
+            className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium active:scale-[0.98] transition"
+          >
+            {soloLabel}
+          </button>
+        ) : null}
+        <p className="text-xs text-neutral-400 leading-relaxed text-center">
+          {male && female
+            ? "두 분 다 올렸어요! 자동으로 만들어 드릴게요"
+            : soloLabel
+              ? "둘 다 올리면 함께 찍은 웨딩 스냅으로 만들어 드려요"
+              : "두 분 다 올리면 자동으로 함께 찍은 웨딩 스냅이 만들어져요"}
         </p>
       </div>
     </section>

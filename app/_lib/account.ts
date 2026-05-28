@@ -34,10 +34,12 @@ export async function deleteAccount(userId: string) {
   for (const jobId of jobIds) {
     const record = await readJobRecord(jobId).catch(() => null);
     if (!record) continue;
-    objectPaths.push(
-      record.input.maleObjectPath,
-      record.input.femaleObjectPath,
-    );
+    if (record.input.maleObjectPath) {
+      objectPaths.push(record.input.maleObjectPath);
+    }
+    if (record.input.femaleObjectPath) {
+      objectPaths.push(record.input.femaleObjectPath);
+    }
     if (record.result) {
       objectPaths.push(
         record.result.cleanObjectPath,

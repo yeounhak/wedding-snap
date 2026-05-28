@@ -37,6 +37,9 @@ yarn-error.log*
 # local image generation job storage
 .wedding-snap-jobs/
 
+# supabase CLI cache
+supabase/.temp/
+
 # vercel
 .vercel
 

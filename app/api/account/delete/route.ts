@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { deleteAccount } from "@/app/_lib/account";
 import { getCurrentUser } from "@/app/_lib/access-control";
+import { WEDDING_SNAP_HAS_LOGGED_IN_COOKIE } from "@/app/_lib/kakao-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,5 +25,7 @@ export async function POST() {
     );
   }
 
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  response.cookies.delete(WEDDING_SNAP_HAS_LOGGED_IN_COOKIE);
+  return response;
 }

@@ -37,10 +37,25 @@ type ErrorAction = "login" | "purchase" | null;
 
 const PROGRESS_MESSAGES = [
   "사진을 분석하고 있어요…",
-  "두 분의 모습을 담는 중이에요…",
+  "모습을 담는 중이에요…",
   "스타일을 입히는 중이에요…",
   "마지막 손길을 더하는 중이에요…",
 ];
+
+type SubjectMode = "couple" | "bride" | "groom";
+
+function getSubjectMode(male: File | null, female: File | null): SubjectMode | null {
+  if (male && female) return "couple";
+  if (female) return "bride";
+  if (male) return "groom";
+  return null;
+}
+
+const SUCCESS_TITLE: Record<SubjectMode, string> = {
+  couple: "두 분의 웨딩 사진이에요",
+  bride: "신부 웨딩 사진이에요",
+  groom: "신랑 웨딩 사진이에요",
+};
 
 export default function GenerateSection({
   ref,
@@ -61,7 +76,8 @@ export default function GenerateSection({
   const [shareNotice, setShareNotice] = useState<string | null>(null);
   const triggeredRef = useRef(false);
   const generationSeqRef = useRef(0);
-  const hasInputs = Boolean(male && female);
+  const subjectMode = getSubjectMode(male, female);
+  const hasInputs = subjectMode !== null;
   const hasRestoredJob = Boolean(restoredJob?.resultUrl);
   const hasDisplayContext = hasInputs || hasRestoredJob;
   const displayStatus = hasDisplayContext ? status : "idle";
@@ -69,7 +85,7 @@ export default function GenerateSection({
   const displayError = hasDisplayContext ? error : null;
 
   const generate = useCallback(async () => {
-    if (!male || !female) return;
+    if (!male && !female) return;
     const generationSeq = generationSeqRef.current + 1;
     generationSeqRef.current = generationSeq;
     setStatus("loading");
@@ -80,8 +96,8 @@ export default function GenerateSection({
     setMsgIdx(0);
     try {
       const fd = new FormData();
-      fd.append("male", male);
-      fd.append("female", female);
+      if (male) fd.append("male", male);
+      if (female) fd.append("female", female);
       const res = await fetch("/api/generate", { method: "POST", body: fd });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as GenerateErrorResponse;
@@ -126,17 +142,17 @@ export default function GenerateSection({
     return () => window.clearTimeout(id);
   }, [restoredJob]);
 
-  // Trigger once when this section first becomes active with both files
+  // Trigger once when this section first becomes active with at least one file
   useEffect(() => {
-    if (!active || !male || !female) return;
+    if (!active || (!male && !female)) return;
     if (triggeredRef.current) return;
     triggeredRef.current = true;
     void generate();
   }, [active, male, female, generate]);
 
-  // Reset trigger when files clear so re-uploading starts a new Workflow.
+  // Reset trigger when all files clear so re-uploading starts a new Workflow.
   useEffect(() => {
-    if (!male || !female) {
+    if (!male && !female) {
       if (restoredJob?.resultUrl) return;
       generationSeqRef.current += 1;
       triggeredRef.current = false;
@@ -160,7 +176,7 @@ export default function GenerateSection({
 
   const loginToUnlock = () => {
     if (!job?.jobId) return;
-    const next = `/?unlockJobId=${encodeURIComponent(job.jobId)}`;
+    const next = `/welcome?unlockJobId=${encodeURIComponent(job.jobId)}`;
     window.location.assign(`/api/auth/kakao/login?next=${encodeURIComponent(next)}`);
   };
 
@@ -203,7 +219,7 @@ export default function GenerateSection({
       <div className="px-6 pt-4 pb-3">
         <h2 className="text-2xl font-semibold tracking-tight">
           {displayStatus === "success"
-            ? "두 분의 웨딩 사진이에요"
+            ? SUCCESS_TITLE[subjectMode ?? "couple"]
             : displayStatus === "error"
               ? "다시 시도해주세요"
               : "사진을 만들고 있어요"}
