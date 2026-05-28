@@ -18,7 +18,7 @@ env:
   GCP_WORKER_VM_ZONE: ${{ vars.GCP_WORKER_VM_ZONE }}
   TEMPORAL_WORKER_DEPLOYMENT_NAME: ${{ vars.TEMPORAL_WORKER_DEPLOYMENT_NAME || 'wedding-snap-worker' }}
   WEDDING_SNAP_WORKER_ENV_FILE: ${{ vars.WEDDING_SNAP_WORKER_ENV_FILE || '/etc/wedding-snap/worker.env' }}
-  WEDDING_SNAP_WORKER_KEEP_VERSIONS: ${{ vars.WEDDING_SNAP_WORKER_KEEP_VERSIONS || '3' }}
+  WEDDING_SNAP_WORKER_STOP_TIMEOUT_SECONDS: ${{ vars.WEDDING_SNAP_WORKER_STOP_TIMEOUT_SECONDS || '30' }}
 
 jobs:
   worker:
@@ -96,12 +96,12 @@ jobs:
             --quiet
 
           remote_env=$(printf \
-            "IMAGE=%q BUILD_ID=%q TEMPORAL_WORKER_DEPLOYMENT_NAME=%q WEDDING_SNAP_WORKER_ENV_FILE=%q WEDDING_SNAP_WORKER_KEEP_VERSIONS=%q" \
+            "IMAGE=%q BUILD_ID=%q TEMPORAL_WORKER_DEPLOYMENT_NAME=%q WEDDING_SNAP_WORKER_ENV_FILE=%q WEDDING_SNAP_WORKER_STOP_TIMEOUT_SECONDS=%q" \
             "${{ steps.image.outputs.image }}" \
             "${GITHUB_SHA}" \
             "${TEMPORAL_WORKER_DEPLOYMENT_NAME}" \
             "${WEDDING_SNAP_WORKER_ENV_FILE}" \
-            "${WEDDING_SNAP_WORKER_KEEP_VERSIONS}")
+            "${WEDDING_SNAP_WORKER_STOP_TIMEOUT_SECONDS}")
 
           gcloud compute ssh "${GCP_WORKER_VM_NAME}" \
             --project "${GCP_PROJECT_ID}" \

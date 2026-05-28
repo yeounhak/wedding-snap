@@ -80,8 +80,13 @@ deployed by `.github/workflows/worker.yml`:
 1. build and typecheck the worker image from `Dockerfile.worker`
 2. push the image to Google Artifact Registry as `${GITHUB_SHA}` and `main`
 3. copy `scripts/deploy-worker-vm.sh` to the GCE worker VM
-4. start a SHA-specific Podman/systemd worker service
+4. stop older worker units/containers and start one SHA-specific Podman/systemd worker service
 5. promote that SHA with `temporal worker deployment set-current-version`
+
+The VM deploy keeps a single active worker process. Older
+`wedding-snap-worker-*.service` units and their Podman containers are disabled
+and removed during each successful deployment so a small VM does not run
+multiple worker versions at the same time.
 
 Required GitHub repository variables:
 
@@ -95,7 +100,7 @@ GCP_WORKLOAD_IDENTITY_PROVIDER=
 GCP_SERVICE_ACCOUNT=
 TEMPORAL_WORKER_DEPLOYMENT_NAME=wedding-snap-worker
 WEDDING_SNAP_WORKER_ENV_FILE=/etc/wedding-snap/worker.env
-WEDDING_SNAP_WORKER_KEEP_VERSIONS=3
+WEDDING_SNAP_WORKER_STOP_TIMEOUT_SECONDS=30
 ```
 
 The worker VM must have Podman, Google Cloud CLI, Temporal CLI, and

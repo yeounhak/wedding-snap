@@ -6,11 +6,16 @@ set -euo pipefail
 
 DEPLOYMENT_NAME="${TEMPORAL_WORKER_DEPLOYMENT_NAME:-wedding-snap-worker}"
 ENV_FILE="${WEDDING_SNAP_WORKER_ENV_FILE:-/etc/wedding-snap/worker.env}"
-KEEP_VERSIONS="${WEDDING_SNAP_WORKER_KEEP_VERSIONS:-3}"
+STOP_TIMEOUT_SECONDS="${WEDDING_SNAP_WORKER_STOP_TIMEOUT_SECONDS:-30}"
 SHORT_BUILD_ID="${BUILD_ID:0:12}"
 CONTAINER_NAME="wedding-snap-worker-${SHORT_BUILD_ID}"
 UNIT_NAME="${CONTAINER_NAME}.service"
 UNIT_PATH="/etc/systemd/system/${UNIT_NAME}"
+
+if ! [[ "${STOP_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
+  echo "WEDDING_SNAP_WORKER_STOP_TIMEOUT_SECONDS must be a non-negative integer" >&2
+  exit 1
+fi
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "Missing worker env file: ${ENV_FILE}" >&2
@@ -45,6 +50,62 @@ strip_trailing_cr() {
 strip_trailing_cr TEMPORAL_ADDRESS
 strip_trailing_cr TEMPORAL_NAMESPACE
 strip_trailing_cr TEMPORAL_API_KEY
+
+stop_systemd_unit() {
+  local unit="$1"
+  local stop_deadline=$((STOP_TIMEOUT_SECONDS + 15))
+
+  if ! systemctl list-unit-files --no-legend --no-pager "${unit}" 2>/dev/null | grep -q . &&
+    ! systemctl list-units --all --no-legend --no-pager "${unit}" 2>/dev/null | grep -q .; then
+    return 0
+  fi
+
+  echo "Stopping previous worker unit: ${unit}"
+  if ! timeout "${stop_deadline}s" systemctl stop "${unit}" >/dev/null 2>&1; then
+    echo "Worker unit did not stop within ${stop_deadline}s; killing: ${unit}" >&2
+    systemctl kill --kill-who=all "${unit}" >/dev/null 2>&1 || true
+    timeout 10s systemctl stop "${unit}" >/dev/null 2>&1 || true
+  fi
+
+  systemctl disable "${unit}" >/dev/null 2>&1 || true
+}
+
+remove_worker_container() {
+  local container="$1"
+
+  if [[ "${container}" == "${CONTAINER_NAME}" ]]; then
+    return 0
+  fi
+
+  "${PODMAN_BIN}" rm -f "${container}" >/dev/null 2>&1 || true
+}
+
+cleanup_previous_workers() {
+  local unit unit_path container
+
+  # Clean up the pre-versioning service/container name used by early VM deploys.
+  stop_systemd_unit "wedding-snap-temporal-worker.service"
+  rm -f /etc/systemd/system/wedding-snap-temporal-worker.service
+  "${PODMAN_BIN}" rm -f wedding-snap-temporal-worker >/dev/null 2>&1 || true
+
+  while IFS= read -r unit; do
+    [[ -n "${unit}" ]] || continue
+    [[ "${unit}" == "${UNIT_NAME}" ]] && continue
+    stop_systemd_unit "${unit}"
+  done < <(systemctl list-unit-files --no-legend --no-pager 'wedding-snap-worker-*.service' 2>/dev/null | awk '{print $1}' || true)
+
+  for unit_path in /etc/systemd/system/wedding-snap-worker-*.service; do
+    [[ -e "${unit_path}" ]] || continue
+    unit="$(basename "${unit_path}")"
+    [[ "${unit}" == "${UNIT_NAME}" ]] && continue
+    rm -f "${unit_path}"
+  done
+
+  while IFS= read -r container; do
+    [[ "${container}" == wedding-snap-worker-* ]] || continue
+    remove_worker_container "${container}"
+  done < <("${PODMAN_BIN}" ps -a --format '{{.Names}}' 2>/dev/null || true)
+}
 
 registry_host="${IMAGE%%/*}"
 registry_token=""
@@ -90,10 +151,10 @@ ExecStart=${PODMAN_BIN} run --rm \\
   --env TEMPORAL_WORKER_VERSIONING=required \\
   --env TEMPORAL_WORKER_DEPLOYMENT_NAME=${DEPLOYMENT_NAME} \\
   ${IMAGE}
-ExecStop=${PODMAN_BIN} stop -t 420 ${CONTAINER_NAME}
+ExecStop=${PODMAN_BIN} stop -t ${STOP_TIMEOUT_SECONDS} ${CONTAINER_NAME}
 Restart=always
 RestartSec=5
-TimeoutStopSec=450
+TimeoutStopSec=$((STOP_TIMEOUT_SECONDS + 30))
 KillSignal=SIGTERM
 
 [Install]
@@ -101,7 +162,10 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now "${UNIT_NAME}"
+cleanup_previous_workers
+systemctl daemon-reload
+systemctl enable "${UNIT_NAME}"
+systemctl restart "${UNIT_NAME}"
 
 for _ in {1..30}; do
   if systemctl is-active --quiet "${UNIT_NAME}"; then
@@ -151,16 +215,6 @@ fi
   --yes \
   "${temporal_args[@]}"
 
-mapfile -t unit_paths < <(ls -1t /etc/systemd/system/wedding-snap-worker-*.service 2>/dev/null || true)
-index=0
-for unit_path in "${unit_paths[@]}"; do
-  unit="$(basename "${unit_path}")"
-  index=$((index + 1))
-  if (( index > KEEP_VERSIONS )); then
-    systemctl disable --now "${unit}" || true
-    rm -f "${unit_path}"
-  fi
-done
-
+cleanup_previous_workers
 systemctl daemon-reload
 systemctl status "${UNIT_NAME}" --no-pager
