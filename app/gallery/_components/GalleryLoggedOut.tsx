@@ -11,7 +11,7 @@ export default function GalleryLoggedOut() {
     >
       <header className="px-6 pb-3 flex items-center gap-3">
         <Link
-          href="/"
+          href="/welcome"
           aria-label="홈으로"
           className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 text-neutral-700 active:scale-95 transition"
         >
@@ -29,7 +29,7 @@ export default function GalleryLoggedOut() {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </Link>
-        <h1 className="text-lg font-semibold tracking-tight">내 사진</h1>
+        <h1 className="text-lg font-semibold tracking-tight">갤러리</h1>
       </header>
 
       <div className="flex-1 px-6 flex flex-col items-center justify-center text-center gap-5">
@@ -52,7 +52,7 @@ export default function GalleryLoggedOut() {
         </div>
         <div className="space-y-1.5">
           <p className="text-base font-semibold text-neutral-900">
-            로그인하면 만든 사진을 모아볼 수 있어요
+            로그인하면 갤러리를 볼 수 있어요
           </p>
           <p className="text-sm text-neutral-500">
             카카오 로그인으로 워터마크 없는 사진을
@@ -61,13 +61,13 @@ export default function GalleryLoggedOut() {
           </p>
         </div>
         <a
-          href="/api/auth/kakao/login?next=%2Fme"
+          href="/api/auth/kakao/login?next=%2Fgallery"
           className="w-full max-w-xs h-12 rounded-full bg-[#FEE500] text-[#191919] font-semibold flex items-center justify-center active:scale-[0.98] transition"
         >
           카카오 로그인
         </a>
         <Link
-          href="/"
+          href="/welcome"
           className="text-xs text-neutral-400 underline-offset-2 hover:underline"
         >
           사진 만들러 가기

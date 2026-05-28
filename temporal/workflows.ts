@@ -17,7 +17,7 @@ const jobActivities = proxyActivities<
 const imageActivities = proxyActivities<
   Pick<typeof activities, "generateWeddingImage">
 >({
-  startToCloseTimeout: "6 minutes",
+  startToCloseTimeout: "10 minutes",
   retry: {
     initialInterval: "5 seconds",
     backoffCoefficient: 2,

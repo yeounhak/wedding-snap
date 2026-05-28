@@ -8,6 +8,8 @@ export type GenerateJobAccessMode = "anonymous_watermarked" | "credit_clean";
 
 export type GenerateJobSubjectMode = "couple" | "bride" | "groom";
 
+export const GENERATED_IMAGES_PER_JOB = 4;
+
 export type GenerateJobRecord = {
   id: string;
   status: GenerateJobStatus;
@@ -41,6 +43,9 @@ export type GenerateJobRecord = {
 export type GenerateJobResult = {
   cleanObjectPath: string;
   watermarkedObjectPath: string;
+  cleanObjectPaths: string[];
+  watermarkedObjectPaths: string[];
+  count: number;
   mimeType: string;
   model: string;
   size: string;
@@ -51,6 +56,7 @@ export type PublicGenerateJob = {
   jobId: string;
   status: GenerateJobStatus;
   resultUrl?: string;
+  resultUrls?: string[];
   error?: string;
   watermarkRequired?: boolean;
   creditsRemaining?: number;
@@ -86,6 +92,7 @@ type JobRow = {
   input_female_mime_type: string | null;
   clean_object_path: string | null;
   watermarked_object_path: string | null;
+  result_count: number | null;
   result_mime_type: string | null;
   model: string | null;
   size: string | null;
@@ -129,15 +136,16 @@ export function publicJob(
 ): PublicGenerateJob {
   const variant =
     options.variant ?? (record.access.requiresWatermark ? "watermarked" : "clean");
-  const resultUrl =
+  const resultUrls =
     record.status === "succeeded" && record.result
-      ? `/api/generate/${record.id}/image?variant=${variant}`
+      ? getPublicResultUrls(record.id, variant, record.result.count)
       : undefined;
 
   return {
     jobId: record.id,
     status: record.status,
-    resultUrl,
+    resultUrl: resultUrls?.[0],
+    resultUrls,
     error: record.error,
     watermarkRequired: variant === "watermarked" && record.access.requiresWatermark,
     creditsRemaining: options.creditsRemaining,
@@ -261,6 +269,7 @@ export async function markJobSucceeded(jobId: string, result: GenerateJobResult)
     status: "succeeded",
     clean_object_path: result.cleanObjectPath,
     watermarked_object_path: result.watermarkedObjectPath,
+    result_count: result.count,
     result_mime_type: result.mimeType,
     model: result.model,
     size: result.size,
@@ -354,9 +363,19 @@ export async function downloadJobObject(objectPath: string) {
   return Buffer.from(await data.arrayBuffer());
 }
 
-export function getResultObjectPath(jobId: string, variant: "clean" | "watermarked") {
+export function getResultObjectPath(
+  jobId: string,
+  variant: "clean" | "watermarked",
+  index = 0,
+) {
   validateJobId(jobId);
-  return `jobs/${jobId}/result/${variant}.jpg`;
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error("Invalid image index");
+  }
+  if (index === 0) {
+    return `jobs/${jobId}/result/${variant}.jpg`;
+  }
+  return `jobs/${jobId}/result/${variant}-${index + 1}.jpg`;
 }
 
 function validateInputFile(file: File) {
@@ -423,6 +442,19 @@ function rowToRecord(row: JobRow): GenerateJobRecord {
       ? {
           cleanObjectPath: row.clean_object_path,
           watermarkedObjectPath: row.watermarked_object_path,
+          cleanObjectPaths: buildResultObjectPaths(
+            row.id,
+            "clean",
+            row.clean_object_path,
+            row.result_count,
+          ),
+          watermarkedObjectPaths: buildResultObjectPaths(
+            row.id,
+            "watermarked",
+            row.watermarked_object_path,
+            row.result_count,
+          ),
+          count: normalizeResultCount(row.result_count),
           mimeType: row.result_mime_type,
           model: row.model,
           size: row.size,
@@ -475,4 +507,32 @@ function deriveSubjectMode(
 
 function normalizeMime(mimeType: string) {
   return mimeType === "image/jpg" ? "image/jpeg" : mimeType;
+}
+
+function getPublicResultUrls(
+  jobId: string,
+  variant: "clean" | "watermarked",
+  count: number,
+) {
+  return Array.from(
+    { length: normalizeResultCount(count) },
+    (_, index) => `/api/generate/${jobId}/image?variant=${variant}&index=${index}`,
+  );
+}
+
+function buildResultObjectPaths(
+  jobId: string,
+  variant: "clean" | "watermarked",
+  firstObjectPath: string,
+  count: number | null,
+) {
+  const paths = [firstObjectPath];
+  for (let index = 1; index < normalizeResultCount(count); index += 1) {
+    paths.push(getResultObjectPath(jobId, variant, index));
+  }
+  return paths;
+}
+
+function normalizeResultCount(count: number | null | undefined) {
+  return Number.isInteger(count) && Number(count) > 0 ? Number(count) : 1;
 }

@@ -42,8 +42,8 @@ export async function deleteAccount(userId: string) {
     }
     if (record.result) {
       objectPaths.push(
-        record.result.cleanObjectPath,
-        record.result.watermarkedObjectPath,
+        ...record.result.cleanObjectPaths,
+        ...record.result.watermarkedObjectPaths,
       );
     }
   }

@@ -32,7 +32,7 @@ export async function createServerSupabaseClient() {
             cookieStore.set(name, value, options);
           }
         } catch {
-          // `setAll` runs during a Server Component render (e.g. the /me page),
+          // `setAll` runs during a Server Component render (e.g. the /gallery page),
           // where the cookie store is read-only and `.set` throws. Safe to
           // ignore: `proxy.ts` refreshes and persists the session for the
           // request before the component renders, so this is just a safety net.

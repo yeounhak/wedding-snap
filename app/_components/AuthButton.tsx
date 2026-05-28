@@ -49,9 +49,9 @@ export default function AuthButton() {
   if (session) {
     return (
       <Link
-        href="/me"
-        aria-label="내 사진 보기"
-        title="내 사진"
+        href="/gallery"
+        aria-label="갤러리 보기"
+        title="갤러리"
         className="inline-flex h-9 max-w-[160px] items-center gap-1.5 rounded-full border border-neutral-200 bg-white/85 pl-2.5 pr-3 text-neutral-700 shadow-sm backdrop-blur-sm active:scale-[0.98]"
       >
         <svg

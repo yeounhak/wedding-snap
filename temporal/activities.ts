@@ -9,6 +9,7 @@ import sharp from "sharp";
 
 import {
   downloadJobObject,
+  GENERATED_IMAGES_PER_JOB,
   getResultObjectPath,
   markJobFailed as markFailed,
   markJobRunning as markRunning,
@@ -102,23 +103,18 @@ export async function generateWeddingImage(jobId: string): Promise<GenerateJobRe
     );
   }
 
-  let response;
+  let cleanBuffers: Buffer[] = [];
   try {
     const imagePaths = await Promise.all(downloads);
     if (imagePaths.length === 0) {
       throw new Error("Job has no reference photos");
     }
 
-    response = await openai.images.edit({
-      model: MODEL,
-      image: imagePaths.map((p) => createReadStream(p)),
-      prompt: resolvePrompt(subjectMode),
-      background: "opaque",
-      n: 1,
-      output_format: OUTPUT_FORMAT,
-      quality: QUALITY as "low" | "medium" | "high" | "auto",
-      size: SIZE,
-    });
+    cleanBuffers = await Promise.all(
+      Array.from({ length: GENERATED_IMAGES_PER_JOB }, (_, index) =>
+        generateOneImage(openai, imagePaths, subjectMode, index),
+      ),
+    );
   } catch (error) {
     if (error instanceof OpenAI.APIError && error.status < 500) {
       throw ApplicationFailure.nonRetryable(error.message, "OpenAIBadRequest");
@@ -128,29 +124,59 @@ export async function generateWeddingImage(jobId: string): Promise<GenerateJobRe
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
 
-  const b64 = response.data?.[0]?.b64_json;
-  if (!b64) {
-    throw new Error("OpenAI image response did not include image data");
-  }
-
-  const cleanBuffer = Buffer.from(b64, "base64");
-  const watermarkedBuffer = await applyWatermark(cleanBuffer);
-  const cleanObjectPath = getResultObjectPath(jobId, "clean");
-  const watermarkedObjectPath = getResultObjectPath(jobId, "watermarked");
+  const watermarkedBuffers = await Promise.all(cleanBuffers.map(applyWatermark));
+  const cleanObjectPaths = cleanBuffers.map((_, index) =>
+    getResultObjectPath(jobId, "clean", index),
+  );
+  const watermarkedObjectPaths = cleanBuffers.map((_, index) =>
+    getResultObjectPath(jobId, "watermarked", index),
+  );
 
   await Promise.all([
-    uploadJobObject(cleanObjectPath, cleanBuffer, OUTPUT_MIME),
-    uploadJobObject(watermarkedObjectPath, watermarkedBuffer, OUTPUT_MIME),
+    ...cleanBuffers.map((buffer, index) =>
+      uploadJobObject(cleanObjectPaths[index], buffer, OUTPUT_MIME),
+    ),
+    ...watermarkedBuffers.map((buffer, index) =>
+      uploadJobObject(watermarkedObjectPaths[index], buffer, OUTPUT_MIME),
+    ),
   ]);
 
   return {
-    cleanObjectPath,
-    watermarkedObjectPath,
+    cleanObjectPath: cleanObjectPaths[0],
+    watermarkedObjectPath: watermarkedObjectPaths[0],
+    cleanObjectPaths,
+    watermarkedObjectPaths,
+    count: cleanBuffers.length,
     mimeType: OUTPUT_MIME,
     model: MODEL,
     size: SIZE,
     quality: QUALITY,
   };
+}
+
+async function generateOneImage(
+  openai: OpenAI,
+  imagePaths: string[],
+  subjectMode: "couple" | "bride" | "groom",
+  index: number,
+) {
+  const response = await openai.images.edit({
+    model: MODEL,
+    image: imagePaths.map((p) => createReadStream(p)),
+    prompt: resolvePrompt(subjectMode, index),
+    background: "opaque",
+    n: 1,
+    output_format: OUTPUT_FORMAT,
+    quality: QUALITY as "low" | "medium" | "high" | "auto",
+    size: SIZE,
+  });
+
+  const b64 = response.data?.[0]?.b64_json;
+  if (!b64) {
+    throw new Error(`OpenAI image response ${index + 1} did not include image data`);
+  }
+
+  return Buffer.from(b64, "base64");
 }
 
 function getOpenAIBaseURL() {
@@ -159,7 +185,12 @@ function getOpenAIBaseURL() {
   return /^https?:\/\//i.test(baseURL) ? baseURL : `https://${baseURL}`;
 }
 
-function resolvePrompt(subjectMode: "couple" | "bride" | "groom") {
+function resolvePrompt(subjectMode: "couple" | "bride" | "groom", index: number) {
+  const promptSlot = process.env[
+    `WEDDING_SNAP_PROMPT_${subjectMode.toUpperCase()}_${index + 1}`
+  ]?.trim();
+  if (promptSlot) return promptSlot;
+
   if (subjectMode === "bride") {
     return process.env.WEDDING_SNAP_PROMPT_BRIDE ?? BRIDE_PROMPT;
   }

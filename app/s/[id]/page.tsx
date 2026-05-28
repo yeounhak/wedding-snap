@@ -64,7 +64,12 @@ export default async function SharePage({ params }: Params) {
     return <NotFound />;
   }
 
-  return <SharedView imageUrl={`/api/generate/${id}/image?variant=watermarked`} />;
+  const imageUrls = Array.from(
+    { length: record.result?.count ?? 1 },
+    (_, index) => `/api/generate/${id}/image?variant=watermarked&index=${index}`,
+  );
+
+  return <SharedView imageUrls={imageUrls} />;
 }
 
 function Wordmark() {
@@ -98,7 +103,7 @@ function Wordmark() {
   );
 }
 
-function SharedView({ imageUrl }: { imageUrl: string }) {
+function SharedView({ imageUrls }: { imageUrls: string[] }) {
   return (
     <main
       className="min-h-[100dvh] w-full flex flex-col bg-white"
@@ -113,23 +118,34 @@ function SharedView({ imageUrl }: { imageUrl: string }) {
 
       <div className="flex-1 px-6 py-4 flex flex-col items-center justify-center gap-6">
         <div className="relative w-full max-w-sm aspect-[4/5] rounded-3xl overflow-hidden bg-neutral-100 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            alt="공유된 웨딩 사진"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+          <div className="absolute inset-0 flex overflow-x-scroll snap-x snap-mandatory no-scrollbar">
+            {imageUrls.map((imageUrl, idx) => (
+              <div key={imageUrl} className="relative h-full min-w-full snap-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageUrl}
+                  alt={`공유된 웨딩 사진 ${idx + 1}`}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              </div>
+            ))}
+          </div>
+          {imageUrls.length > 1 ? (
+            <div className="absolute right-3 top-3 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">
+              {imageUrls.length}장
+            </div>
+          ) : null}
         </div>
         <div className="text-center space-y-1.5">
           <h1 className="text-xl font-semibold tracking-tight text-neutral-900">
-            두 사람의 사진으로 만든 웨딩 사진
+            두 사람의 사진으로 만든 웨딩 사진 묶음
           </h1>
           <p className="text-sm text-neutral-500">
             Wedding Snap에서 나도 만들어 보세요
           </p>
         </div>
         <Link
-          href="/"
+          href="/welcome"
           className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium flex items-center justify-center active:scale-[0.98] transition"
         >
           나도 만들어보기
@@ -160,7 +176,7 @@ function NotFound() {
         </p>
       </div>
       <Link
-        href="/"
+        href="/welcome"
         className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium flex items-center justify-center active:scale-[0.98] transition"
       >
         Wedding Snap 만들러 가기

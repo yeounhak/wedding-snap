@@ -1,6 +1,9 @@
 import type { User } from "@supabase/supabase-js";
 
-import type { GenerateJobRecord } from "./generate-jobs";
+import {
+  GENERATED_IMAGES_PER_JOB,
+  type GenerateJobRecord,
+} from "./generate-jobs";
 import { createServerSupabaseClient } from "./supabase/server";
 import { createSupabaseAdminClient } from "./supabase/admin";
 
@@ -62,7 +65,10 @@ export async function reserveGenerateAccess(params: {
   ipPrefixHash: string | null;
 }): Promise<GenerateAccessReservation> {
   if (params.user) {
-    const creditReservation = await reserveCredit(params.user.id);
+    const creditReservation = await reserveCredit(
+      params.user.id,
+      GENERATED_IMAGES_PER_JOB,
+    );
     if (creditReservation.allowed) {
       return {
         allowed: true,
@@ -79,7 +85,7 @@ export async function reserveGenerateAccess(params: {
       allowed: false,
       code: "CREDIT_REQUIRED",
       status: 402,
-      message: "크레딧을 구매하면 워터마크 없이 더 만들 수 있어요.",
+      message: `크레딧 ${GENERATED_IMAGES_PER_JOB}개가 있어야 워터마크 없이 ${GENERATED_IMAGES_PER_JOB}장 묶음을 만들 수 있어요.`,
       creditsRemaining: creditReservation.balanceAfter,
     };
   }
@@ -144,7 +150,7 @@ export async function getEligibility(params: {
         : Promise.resolve(0),
     ]);
 
-  if (params.user && creditsRemaining > 0) {
+  if (params.user && creditsRemaining >= GENERATED_IMAGES_PER_JOB) {
     return {
       canGenerate: true,
       mode: "credit_clean",
@@ -265,10 +271,11 @@ export async function unlockAnonymousJob(params: {
   };
 }
 
-async function reserveCredit(userId: string) {
+async function reserveCredit(userId: string, creditCost: number) {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.rpc("reserve_credit_generation", {
     p_user_id: userId,
+    p_credit_cost: creditCost,
   });
 
   if (error) throw error;

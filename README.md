@@ -47,10 +47,10 @@ Optional policy/product variables:
 WEDDING_SNAP_DEVICE_SECRET=
 WEDDING_SNAP_STORAGE_BUCKET=wedding-snap-jobs
 WEDDING_SNAP_ANONYMOUS_IP_DAILY_LIMIT=6
-WEDDING_SNAP_CREDIT_PACK_SKU=wedding-snap-credit-5
-WEDDING_SNAP_CREDIT_PACK_NAME=웨딩 스냅 5장 크레딧
+WEDDING_SNAP_CREDIT_PACK_SKU=wedding-snap-credit-8
+WEDDING_SNAP_CREDIT_PACK_NAME=웨딩 스냅 8장 크레딧
 WEDDING_SNAP_CREDIT_PACK_AMOUNT=3900
-WEDDING_SNAP_CREDIT_PACK_CREDITS=5
+WEDDING_SNAP_CREDIT_PACK_CREDITS=8
 ```
 
 Temporal worker deployment variables:
@@ -68,9 +68,9 @@ worker VM. Vercel should expose system environment variables so
 `VERCEL_GIT_COMMIT_SHA` is available at runtime; the VM deployment injects the
 same value as `APP_BUILD_ID`.
 
-Anonymous users can generate one watermarked image per device quota window.
+Anonymous users can generate one watermarked four-image bundle per device quota window.
 Kakao login can unlock that same device's anonymous result once without another
-OpenAI generation. Paid users spend one credit per clean generation.
+OpenAI generation. Paid users spend four credits per clean four-image bundle.
 
 ## Worker CI/CD
 

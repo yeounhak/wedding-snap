@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const cookieStore = await cookies();
   const hasLoggedIn = cookieStore.has(WEDDING_SNAP_HAS_LOGGED_IN_COOKIE);
-  redirect(hasLoggedIn ? "/me" : "/welcome");
+  redirect(hasLoggedIn ? "/gallery" : "/welcome");
 }

@@ -28,7 +28,7 @@ async function main() {
           },
         }
       : {}),
-    shutdownGraceTime: "8 minutes",
+    shutdownGraceTime: "12 minutes",
   });
 
   console.log(

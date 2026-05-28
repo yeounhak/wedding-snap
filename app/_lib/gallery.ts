@@ -7,18 +7,26 @@ export type GalleryItem = {
   createdAt: string;
   /** Clean (watermark-free) image endpoint. Authorized via the session cookie. */
   resultUrl: string;
+  resultUrls: string[];
 };
 
 type JobIdRow = {
   id: string;
   created_at: string;
+  result_count: number | null;
 };
 
 function toItem(row: JobIdRow): GalleryItem {
+  const resultUrls = Array.from(
+    { length: normalizeResultCount(row.result_count) },
+    (_, index) => `/api/generate/${row.id}/image?variant=clean&index=${index}`,
+  );
+
   return {
     jobId: row.id,
     createdAt: row.created_at,
-    resultUrl: `/api/generate/${row.id}/image?variant=clean`,
+    resultUrl: resultUrls[0],
+    resultUrls,
   };
 }
 
@@ -34,7 +42,7 @@ export async function listUserGallery(userId: string): Promise<GalleryItem[]> {
   const [owned, unlocks] = await Promise.all([
     admin
       .from("generation_jobs")
-      .select("id, created_at")
+      .select("id, created_at, result_count")
       .eq("user_id", userId)
       .eq("status", "succeeded")
       .not("clean_object_path", "is", null)
@@ -57,7 +65,7 @@ export async function listUserGallery(userId: string): Promise<GalleryItem[]> {
   if (unlockedJobIds.length > 0) {
     const { data, error } = await admin
       .from("generation_jobs")
-      .select("id, created_at")
+      .select("id, created_at, result_count")
       .in("id", unlockedJobIds)
       .eq("status", "succeeded")
       .not("clean_object_path", "is", null);
@@ -71,4 +79,8 @@ export async function listUserGallery(userId: string): Promise<GalleryItem[]> {
   return [...items.values()].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
+}
+
+function normalizeResultCount(count: number | null | undefined) {
+  return Number.isInteger(count) && Number(count) > 0 ? Number(count) : 1;
 }

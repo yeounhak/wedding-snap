@@ -28,6 +28,10 @@ export async function GET(
 
   const requestedVariant = request.nextUrl.searchParams.get("variant");
   const wantsClean = requestedVariant === "clean";
+  const imageIndex = parseImageIndex(request.nextUrl.searchParams.get("index"));
+  if (imageIndex === null || imageIndex >= record.result.count) {
+    return Response.json({ error: "이미지를 찾을 수 없습니다" }, { status: 404 });
+  }
   const [canReadClean, canReadAny] = await Promise.all([
     canReadCleanJob({ record, user }),
     canReadJob({ record, user, deviceHash: device.deviceHash }),
@@ -48,8 +52,8 @@ export async function GET(
   }
 
   const objectPath = wantsClean
-    ? record.result.cleanObjectPath
-    : record.result.watermarkedObjectPath;
+    ? record.result.cleanObjectPaths[imageIndex]
+    : record.result.watermarkedObjectPaths[imageIndex];
   const data = await downloadJobObject(objectPath).catch(() => null);
   if (!data) {
     return Response.json({ error: "이미지를 찾을 수 없습니다" }, { status: 404 });
@@ -62,4 +66,10 @@ export async function GET(
       "Content-Type": record.result.mimeType,
     },
   });
+}
+
+function parseImageIndex(value: string | null) {
+  if (value === null || value === "") return 0;
+  const index = Number(value);
+  return Number.isInteger(index) && index >= 0 ? index : null;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { GalleryItem } from "@/app/_lib/gallery";
 import { shareResultPhoto } from "@/app/_lib/share-result";
@@ -51,9 +51,9 @@ export default function GalleryClient({ items, credits, userLabel }: Props) {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </Link>
-        <h1 className="text-lg font-semibold tracking-tight">내 사진</h1>
+        <h1 className="text-lg font-semibold tracking-tight">갤러리</h1>
         <Link
-          href="/me/credits"
+          href="/gallery/credits"
           className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 h-9 text-[13px] font-medium text-neutral-700 active:scale-[0.98] transition"
         >
           <svg
@@ -87,10 +87,13 @@ export default function GalleryClient({ items, credits, userLabel }: Props) {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={item.resultUrl}
-                  alt="내가 만든 웨딩 사진"
+                  alt="갤러리 웨딩 사진 묶음"
                   loading="lazy"
                   className="absolute inset-0 h-full w-full object-cover"
                 />
+                <span className="absolute right-2 top-2 rounded-full bg-white/85 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-neutral-800">
+                  {item.resultUrls.length}장
+                </span>
                 <span className="absolute bottom-2 left-2 rounded-full bg-black/35 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white">
                   {formatDate(item.createdAt)}
                 </span>
@@ -135,10 +138,10 @@ function EmptyState() {
       </div>
       <div className="space-y-1.5">
         <p className="text-base font-semibold text-neutral-900">
-          아직 만든 사진이 없어요
+          아직 갤러리가 비어 있어요
         </p>
         <p className="text-sm text-neutral-500">
-          두 사람의 사진으로 웨딩 사진을 만들어 보세요
+          한 번 만들면 웨딩 사진 4장이 갤러리에 저장돼요
         </p>
       </div>
       <Link
@@ -167,7 +170,7 @@ function AccountFooter({
     >
       <div className="flex items-center justify-between gap-3">
         <Link
-          href="/me/account"
+          href="/gallery/account"
           className="min-w-0 flex items-center gap-1 text-[13px] text-neutral-500 active:opacity-70"
         >
           <span className="truncate">{userLabel}</span>
@@ -213,8 +216,18 @@ function AccountFooter({
 }
 
 function Viewer({ item, onClose }: { item: GalleryItem; onClose: () => void }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [activePhotoIdx, setActivePhotoIdx] = useState(0);
   const [sharing, setSharing] = useState(false);
   const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const photoUrls = item.resultUrls.length > 0 ? item.resultUrls : [item.resultUrl];
+  const activeUrl = photoUrls[activePhotoIdx] ?? photoUrls[0];
+
+  const onScroll = () => {
+    const el = scrollerRef.current;
+    if (!el || el.clientWidth === 0) return;
+    setActivePhotoIdx(Math.round(el.scrollLeft / el.clientWidth));
+  };
 
   const share = async () => {
     setSharing(true);
@@ -241,7 +254,7 @@ function Viewer({ item, onClose }: { item: GalleryItem; onClose: () => void }) {
     >
       <div className="px-4 flex items-center justify-between">
         <span className="text-[13px] text-white/60">
-          {formatDate(item.createdAt)}
+          {formatDate(item.createdAt)} · {activePhotoIdx + 1}/{photoUrls.length}
         </span>
         <button
           type="button"
@@ -264,19 +277,42 @@ function Viewer({ item, onClose }: { item: GalleryItem; onClose: () => void }) {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 flex items-center justify-center px-4 py-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={item.resultUrl}
-          alt="내가 만든 웨딩 사진"
-          className="max-h-full max-w-full object-contain rounded-xl"
-        />
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        className="flex-1 min-h-0 flex overflow-x-scroll snap-x snap-mandatory no-scrollbar"
+      >
+        {photoUrls.map((url, idx) => (
+          <div
+            key={url}
+            className="flex h-full min-w-full snap-center items-center justify-center px-4 py-3"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={`갤러리 웨딩 사진 ${idx + 1}`}
+              className="max-h-full max-w-full object-contain rounded-xl"
+            />
+          </div>
+        ))}
       </div>
 
       <div className="px-6 flex flex-col items-center gap-2.5">
+        {photoUrls.length > 1 ? (
+          <div className="mb-1 flex items-center justify-center gap-1.5">
+            {photoUrls.map((_, idx) => (
+              <span
+                key={idx}
+                className={`h-1.5 rounded-full transition-all duration-200 ${
+                  idx === activePhotoIdx ? "w-6 bg-white" : "w-1.5 bg-white/35"
+                }`}
+              />
+            ))}
+          </div>
+        ) : null}
         <a
-          href={item.resultUrl}
-          download={`wedding-snap-${item.jobId}.jpg`}
+          href={activeUrl}
+          download={`wedding-snap-${item.jobId}-${activePhotoIdx + 1}.jpg`}
           className="w-full max-w-xs h-12 rounded-full bg-white text-neutral-900 font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition"
         >
           <svg

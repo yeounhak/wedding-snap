@@ -23,7 +23,7 @@ export async function shareResultPhoto(
     try {
       await navigator.share({
         title: "Wedding Snap",
-        text: "AI로 만든 우리 웨딩 사진 ✨",
+        text: "AI로 만든 우리 웨딩 사진 묶음",
         url: absoluteUrl,
       });
       return { method: "share", url: absoluteUrl };

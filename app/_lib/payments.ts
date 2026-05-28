@@ -29,12 +29,12 @@ export type CreditHistoryItem = {
 
 export function getCreditProduct(): CreditProduct {
   return {
-    sku: process.env.WEDDING_SNAP_CREDIT_PACK_SKU ?? "wedding-snap-credit-5",
-    orderName: process.env.WEDDING_SNAP_CREDIT_PACK_NAME ?? "웨딩 스냅 5장 크레딧",
+    sku: process.env.WEDDING_SNAP_CREDIT_PACK_SKU ?? "wedding-snap-credit-8",
+    orderName: process.env.WEDDING_SNAP_CREDIT_PACK_NAME ?? "웨딩 스냅 8장 크레딧",
     amount: parsePositiveInt(process.env.WEDDING_SNAP_CREDIT_PACK_AMOUNT, 3900),
     creditAmount: parsePositiveInt(
       process.env.WEDDING_SNAP_CREDIT_PACK_CREDITS,
-      5,
+      8,
     ),
     currency: "KRW",
   };

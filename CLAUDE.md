@@ -14,13 +14,13 @@ Particularly:
 
 `/` is **not a page** — it's a server-component redirector at `app/page.tsx`.
 
-- If the `wedding_snap_has_logged_in` cookie is present → `redirect("/me")`
+- If the `wedding_snap_has_logged_in` cookie is present → `redirect("/gallery")`
 - Otherwise → `redirect("/welcome")`
 
 The cookie is a 1-year httpOnly marker set in the Kakao OIDC callback (`app/api/auth/kakao/oidc/route.ts`) on successful login. Constants live in `app/_lib/kakao-auth.ts` (`WEDDING_SNAP_HAS_LOGGED_IN_COOKIE`, `WEDDING_SNAP_HAS_LOGGED_IN_MAX_AGE`). It survives sign-out — only the account-delete endpoint clears it.
 
 Concrete consequences when changing user-facing links:
-- The marketing landing + upload + generate single-page app lives at **`/welcome`** (renders `<AppShell />`). Anything that historically pointed to `/` to reach the AppShell (e.g. the unlock-after-login next URL, "back home" buttons inside `/me`) must point to `/welcome` instead — `/` will redirect logged-in users back to `/me` and lose query params.
+- The marketing landing + upload + generate single-page app lives at **`/welcome`** (renders `<AppShell />`). Anything that historically pointed to `/` to reach the AppShell (e.g. the unlock-after-login next URL, "back home" buttons inside `/gallery`) must point to `/welcome` instead — `/` will redirect logged-in users back to `/gallery` and lose query params.
 - Post-Kakao redirects that want to land on the AppShell must use `next=/welcome?...`, not `next=/?...`.
 
 ## Single-photo (solo) generation
@@ -41,12 +41,13 @@ DB enforcement (migration `20260528000000_solo_generation.sql`):
 - `generation_jobs_inputs_present` CHECK: at least one role present
 - `generation_jobs_{male,female}_pair` CHECK: object_path and mime_type are populated together or both null
 
-Prompt branching lives in `temporal/activities.ts` (`resolvePrompt(subjectMode)`):
+Prompt branching lives in `temporal/activities.ts` (`resolvePrompt(subjectMode, index)`):
+- Per-slot overrides are checked first as `WEDDING_SNAP_PROMPT_{COUPLE|BRIDE|GROOM}_1` through `_4`; this keeps the four generated images independent instead of using `n=4`.
 - `couple` → `COUPLE_PROMPT`, overridable by `WEDDING_SNAP_PROMPT_COUPLE` or legacy `WEDDING_SNAP_PROMPT`
 - `bride` → `BRIDE_PROMPT`, overridable by `WEDDING_SNAP_PROMPT_BRIDE`
 - `groom` → `GROOM_PROMPT`, overridable by `WEDDING_SNAP_PROMPT_GROOM`
 
-The OpenAI `images.edit` call now passes a variable-length array of `createReadStream`s, one per available image.
+The OpenAI `images.edit` call passes a variable-length array of `createReadStream`s, one per available input image. Each job generates four outputs by running four independent `images.edit({ n: 1 })` calls in parallel; the first result keeps the legacy `clean.jpg` / `watermarked.jpg` paths and the rest use indexed paths.
 
 ## UI flow for upload + generate
 
@@ -57,6 +58,7 @@ The OpenAI `images.edit` call now passes a variable-length array of `createReadS
 `GenerateSection` derives `subjectMode` from the files it received and:
 - Branches the success-state title ("두 분의 웨딩 사진이에요" / "신부 웨딩 사진이에요" / "신랑 웨딩 사진이에요")
 - Sends only present files to `/api/generate` (FormData fields are optional)
+- Displays the returned `resultUrls` as a swipeable four-image bundle. Gallery cards are one card per `generation_jobs` row, and the detail viewer swipes through that row's images.
 
 ## Database access
 
