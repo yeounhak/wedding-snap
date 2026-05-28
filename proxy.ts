@@ -7,8 +7,7 @@ const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 /**
  * Refreshes the Supabase session on every page navigation so Server Components
  * (which cannot write cookies) always read a fresh session. API route handlers
- * are excluded via the matcher — they manage their own auth cookies, and the
- * Kakao OIDC callback in particular must own the login cookie write.
+ * are excluded via the matcher because they manage their own auth cookies.
  */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

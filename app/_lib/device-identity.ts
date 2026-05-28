@@ -64,12 +64,11 @@ export function hashOpaqueValue(purpose: string, value: string) {
 function getHashSecret() {
   const secret =
     process.env.WEDDING_SNAP_DEVICE_SECRET ??
-    process.env.SUPABASE_SECRET_KEY ??
-    process.env.KAKAO_CLIENT_SECRET;
+    process.env.SUPABASE_SECRET_KEY;
 
   if (!secret) {
     throw new Error(
-      "WEDDING_SNAP_DEVICE_SECRET, SUPABASE_SECRET_KEY, or KAKAO_CLIENT_SECRET is required",
+      "WEDDING_SNAP_DEVICE_SECRET or SUPABASE_SECRET_KEY is required",
     );
   }
 

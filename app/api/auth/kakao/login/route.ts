@@ -1,55 +1,38 @@
-import { randomUUID } from "node:crypto";
-
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import {
-  getKakaoCallbackUrl,
-  getKakaoRestApiKey,
-  KAKAO_OAUTH_STATE_COOKIE,
-  KAKAO_OIDC_SCOPE,
-  KAKAO_POST_LOGIN_REDIRECT_COOKIE,
+  getSafeNextPath,
+  KAKAO_OAUTH_SCOPES,
 } from "@/app/_lib/kakao-auth";
+import { createServerSupabaseClient } from "@/app/_lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const state = randomUUID();
-  const callbackUrl = getKakaoCallbackUrl(request.url);
   const nextPath = getSafeNextPath(request.nextUrl.searchParams.get("next"));
-  const kakaoAuthUrl = new URL("https://kauth.kakao.com/oauth/authorize");
-  kakaoAuthUrl.searchParams.set("client_id", getKakaoRestApiKey());
-  kakaoAuthUrl.searchParams.set("redirect_uri", callbackUrl);
-  kakaoAuthUrl.searchParams.set("response_type", "code");
-  kakaoAuthUrl.searchParams.set("scope", KAKAO_OIDC_SCOPE);
-  kakaoAuthUrl.searchParams.set("state", state);
-
-  const response = NextResponse.redirect(kakaoAuthUrl);
-  response.cookies.set(KAKAO_OAUTH_STATE_COOKIE, state, {
-    httpOnly: true,
-    maxAge: 10 * 60,
-    path: "/",
-    sameSite: "lax",
-    secure: request.nextUrl.protocol === "https:",
-  });
+  const callbackUrl = new URL("/api/auth/callback", request.nextUrl.origin);
   if (nextPath) {
-    response.cookies.set(KAKAO_POST_LOGIN_REDIRECT_COOKIE, nextPath, {
-      httpOnly: true,
-      maxAge: 10 * 60,
-      path: "/",
-      sameSite: "lax",
-      secure: request.nextUrl.protocol === "https:",
-    });
-  } else {
-    response.cookies.delete(KAKAO_POST_LOGIN_REDIRECT_COOKIE);
+    callbackUrl.searchParams.set("next", nextPath);
   }
 
-  return response;
-}
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "kakao",
+    options: {
+      redirectTo: callbackUrl.toString(),
+      scopes: KAKAO_OAUTH_SCOPES,
+      skipBrowserRedirect: true,
+    },
+  });
 
-function getSafeNextPath(value: string | null) {
-  if (!value) return null;
-  if (!value.startsWith("/") || value.startsWith("//")) return null;
-  return value;
+  if (error || !data.url) {
+    console.error(error ?? new Error("Supabase did not return OAuth URL"));
+    const redirectUrl = new URL(nextPath ?? "/", request.nextUrl.origin);
+    redirectUrl.searchParams.set("auth_error", "kakao_login_failed");
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  return NextResponse.redirect(data.url);
 }

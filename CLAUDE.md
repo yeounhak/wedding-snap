@@ -17,11 +17,18 @@ Particularly:
 - If the `wedding_snap_has_logged_in` cookie is present → `redirect("/gallery")`
 - Otherwise → `redirect("/welcome")`
 
-The cookie is a 1-year httpOnly marker set in the Kakao OIDC callback (`app/api/auth/kakao/oidc/route.ts`) on successful login. Constants live in `app/_lib/kakao-auth.ts` (`WEDDING_SNAP_HAS_LOGGED_IN_COOKIE`, `WEDDING_SNAP_HAS_LOGGED_IN_MAX_AGE`). It survives sign-out — only the account-delete endpoint clears it.
+The cookie is a 1-year httpOnly marker set in the Supabase OAuth callback (`app/api/auth/callback/route.ts`) on successful login. Constants live in `app/_lib/kakao-auth.ts` (`WEDDING_SNAP_HAS_LOGGED_IN_COOKIE`, `WEDDING_SNAP_HAS_LOGGED_IN_MAX_AGE`). It survives sign-out — only the account-delete endpoint clears it.
 
 Concrete consequences when changing user-facing links:
 - The marketing landing + upload + generate single-page app lives at **`/welcome`** (renders `<AppShell />`). Anything that historically pointed to `/` to reach the AppShell (e.g. the unlock-after-login next URL, "back home" buttons inside `/gallery`) must point to `/welcome` instead — `/` will redirect logged-in users back to `/gallery` and lose query params.
 - Post-Kakao redirects that want to land on the AppShell must use `next=/welcome?...`, not `next=/?...`.
+
+## Kakao login
+
+`/api/auth/kakao/login` starts Supabase's Kakao OAuth flow and requests
+`profile_nickname profile_image account_email`. The Kakao app must use the
+Supabase Auth callback URL, and Supabase should not allow provider users without
+an email because Kakao `account_email` is required.
 
 ## Single-photo (solo) generation
 
