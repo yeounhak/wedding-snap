@@ -1,9 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
-const supabaseDatabaseUrl =
-  process.env.SUPABASE_DATABASE_URL ?? process.env.DATABASE_URL;
+import { cleanEnv } from "../env-clean";
+
+const supabaseUrl = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const supabaseSecretKey = cleanEnv(process.env.SUPABASE_SECRET_KEY);
+const supabaseDatabaseUrl = cleanEnv(
+  process.env.SUPABASE_DATABASE_URL ?? process.env.DATABASE_URL,
+);
 
 export function createSupabaseAdminClient() {
   if (!supabaseUrl) {
