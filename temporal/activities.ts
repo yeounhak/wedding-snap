@@ -1,10 +1,9 @@
-import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 import { ApplicationFailure } from "@temporalio/client";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import sharp from "sharp";
 
 import {
@@ -110,9 +109,23 @@ export async function generateWeddingImage(jobId: string): Promise<GenerateJobRe
       throw new Error("Job has no reference photos");
     }
 
+    // Real-location backdrop (Phase 0 validated): download the mirrored venue image and
+    // feed it as the LAST input so gpt-image-2 composites the subject INTO the venue.
+    // Any failure degrades to a venue-less generation rather than failing the paid job.
+    let venuePath: string | null = null;
+    if (record.venue.objectPath) {
+      try {
+        const candidate = path.join(tempDir, "venue.jpg");
+        await fs.writeFile(candidate, await downloadJobObject(record.venue.objectPath));
+        venuePath = candidate;
+      } catch {
+        venuePath = null;
+      }
+    }
+
     cleanBuffers = await Promise.all(
       Array.from({ length: GENERATED_IMAGES_PER_JOB }, (_, index) =>
-        generateOneImage(openai, imagePaths, subjectMode, index),
+        generateOneImage(openai, imagePaths, subjectMode, index, venuePath, record.venue),
       ),
     );
   } catch (error) {
@@ -159,11 +172,19 @@ async function generateOneImage(
   imagePaths: string[],
   subjectMode: "couple" | "bride" | "groom",
   index: number,
+  venuePath: string | null,
+  venue: { title: string | null; category: string | null },
 ) {
+  const useVenue = Boolean(venuePath);
+  const images = useVenue ? [...imagePaths, venuePath as string] : imagePaths;
+  const prompt = useVenue
+    ? resolveVenuePrompt(subjectMode, index, venue)
+    : resolvePrompt(subjectMode, index);
+
   const response = await openai.images.edit({
     model: MODEL,
-    image: imagePaths.map((p) => createReadStream(p)),
-    prompt: resolvePrompt(subjectMode, index),
+    image: await Promise.all(images.map(toUploadable)),
+    prompt,
     background: "opaque",
     n: 1,
     output_format: OUTPUT_FORMAT,
@@ -177,6 +198,20 @@ async function generateOneImage(
   }
 
   return Buffer.from(b64, "base64");
+}
+
+function mimeForPath(p: string) {
+  const ext = path.extname(p).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  return "image/jpeg";
+}
+
+// Upload with an explicit filename + mimetype. Raw createReadStream uploads are seen as
+// application/octet-stream by api.openai.com (direct), which rejects them with a 400;
+// the litellm proxy was lenient. toFile makes it work for both.
+async function toUploadable(p: string) {
+  return toFile(await fs.readFile(p), path.basename(p), { type: mimeForPath(p) });
 }
 
 function getOpenAIBaseURL() {
@@ -202,6 +237,53 @@ function resolvePrompt(subjectMode: "couple" | "bride" | "groom", index: number)
     process.env.WEDDING_SNAP_PROMPT ??
     COUPLE_PROMPT
   );
+}
+
+const VENUE_STYLE =
+  "Use soft daylight, refined editorial photography, realistic skin texture. Do not add text, logos, watermarks, extra people, distorted hands, or surreal details.";
+
+// Phase 0 winner (V2): venue image is the LAST input, treated as background ONLY. This
+// wording is validated to preserve facial identity while compositing the subject into the
+// real venue, without pulling any person out of the venue photo. Overridable per-mode/slot
+// via WEDDING_SNAP_PROMPT_{COUPLE|BRIDE|GROOM}_VENUE[_1..4] using {title}/{category}.
+function venueDefaultPrompt(
+  subjectMode: "couple" | "bride" | "groom",
+  venue: { title: string | null; category: string | null },
+) {
+  const who =
+    subjectMode === "bride" ? "the bride" : subjectMode === "groom" ? "the groom" : "the couple";
+  const subjImgs =
+    subjectMode === "couple" ? "the FIRST TWO reference images" : "the FIRST reference image";
+  const loc = venue.title
+    ? `The real location is "${venue.title}"${venue.category ? ` — ${venue.category}` : ""}.`
+    : "";
+  return [
+    `Create a polished wedding photograph of ${who} using ${subjImgs} as the people.`,
+    `Use the LAST reference image ONLY as the real-world background/location: place ${who} naturally INTO that scene as if actually photographed there, matching its lighting, perspective and depth of field.`,
+    `CRITICAL: do NOT copy, add, borrow, or blend any person, face, or body from the background image — it is an empty location reference only.`,
+    `Preserve ${subjectMode === "couple" ? "each person's" : "their"} facial identity and natural features. Dress ${who} in elegant wedding attire.`,
+    loc,
+    VENUE_STYLE,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function resolveVenuePrompt(
+  subjectMode: "couple" | "bride" | "groom",
+  index: number,
+  venue: { title: string | null; category: string | null },
+) {
+  const upper = subjectMode.toUpperCase();
+  const template =
+    process.env[`WEDDING_SNAP_PROMPT_${upper}_VENUE_${index + 1}`]?.trim() ||
+    process.env[`WEDDING_SNAP_PROMPT_${upper}_VENUE`]?.trim();
+  if (template) {
+    return template
+      .replace(/\{title\}/g, venue.title ?? "")
+      .replace(/\{category\}/g, venue.category ?? "");
+  }
+  return venueDefaultPrompt(subjectMode, venue);
 }
 
 function extensionForMime(mimeType: string) {

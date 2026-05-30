@@ -36,6 +36,13 @@ export type GenerateJobRecord = {
     femaleMimeType: string | null;
     subjectMode: GenerateJobSubjectMode;
   };
+  venue: {
+    id: number | null;
+    objectPath: string | null;
+    title: string | null;
+    category: string | null;
+    rentalUrl: string | null;
+  };
   result?: GenerateJobResult;
   error?: string;
 };
@@ -60,11 +67,25 @@ export type PublicGenerateJob = {
   error?: string;
   watermarkRequired?: boolean;
   creditsRemaining?: number;
+  venue?: {
+    title: string | null;
+    rentalUrl: string | null;
+  };
+};
+
+export type CreateGenerateJobVenue = {
+  id: number;
+  title: string | null;
+  category: string | null;
+  rentalUrl: string | null;
+  imageBytes: Buffer;
+  mimeType: string;
 };
 
 type CreateGenerateJobParams = {
   male: File | null;
   female: File | null;
+  venue?: CreateGenerateJobVenue | null;
   accessMode: GenerateJobAccessMode;
   requiresWatermark: boolean;
   userId?: string | null;
@@ -90,6 +111,11 @@ type JobRow = {
   input_male_mime_type: string | null;
   input_female_object_path: string | null;
   input_female_mime_type: string | null;
+  venue_id: number | null;
+  venue_object_path: string | null;
+  venue_title: string | null;
+  venue_category: string | null;
+  venue_rental_url: string | null;
   clean_object_path: string | null;
   watermarked_object_path: string | null;
   result_count: number | null;
@@ -149,6 +175,10 @@ export function publicJob(
     error: record.error,
     watermarkRequired: variant === "watermarked" && record.access.requiresWatermark,
     creditsRemaining: options.creditsRemaining,
+    venue:
+      record.venue.title || record.venue.rentalUrl
+        ? { title: record.venue.title, rentalUrl: record.venue.rentalUrl }
+        : undefined,
   };
 }
 
@@ -177,6 +207,10 @@ export async function createGenerateJob(params: CreateGenerateJobParams) {
     params.female && femaleMimeType
       ? getInputObjectPath(id, "female", femaleMimeType)
       : null;
+  const venue = params.venue ?? null;
+  const venueMimeType = venue ? normalizeMime(venue.mimeType) : null;
+  const venueObjectPath =
+    venue && venueMimeType ? getInputObjectPath(id, "venue", venueMimeType) : null;
 
   const uploads: Array<Promise<void>> = [];
   if (params.male && maleObjectPath && maleMimeType) {
@@ -186,6 +220,9 @@ export async function createGenerateJob(params: CreateGenerateJobParams) {
     uploads.push(
       uploadFileObject(femaleObjectPath, params.female, femaleMimeType),
     );
+  }
+  if (venue && venueObjectPath && venueMimeType) {
+    uploads.push(uploadJobObject(venueObjectPath, venue.imageBytes, venueMimeType));
   }
   await Promise.all(uploads);
 
@@ -206,6 +243,11 @@ export async function createGenerateJob(params: CreateGenerateJobParams) {
       input_male_mime_type: maleMimeType,
       input_female_object_path: femaleObjectPath,
       input_female_mime_type: femaleMimeType,
+      venue_id: venue?.id ?? null,
+      venue_object_path: venueObjectPath,
+      venue_title: venue?.title ?? null,
+      venue_category: venue?.category ?? null,
+      venue_rental_url: venue?.rentalUrl ?? null,
       temporal_worker_deployment_name:
         params.temporalWorkerDeploymentName ?? null,
       temporal_worker_build_id: params.temporalWorkerBuildId ?? null,
@@ -214,7 +256,7 @@ export async function createGenerateJob(params: CreateGenerateJobParams) {
     .single();
 
   if (error) {
-    const objectsToClean = [maleObjectPath, femaleObjectPath].filter(
+    const objectsToClean = [maleObjectPath, femaleObjectPath, venueObjectPath].filter(
       (path): path is string => path !== null,
     );
     if (objectsToClean.length > 0) {
@@ -419,7 +461,7 @@ async function deleteJobObjects(objectPaths: string[]) {
 
 function getInputObjectPath(
   jobId: string,
-  role: "male" | "female",
+  role: "male" | "female" | "venue",
   mimeType: string,
 ) {
   validateJobId(jobId);
@@ -490,6 +532,13 @@ function rowToRecord(row: JobRow): GenerateJobRecord {
         row.input_male_object_path,
         row.input_female_object_path,
       ),
+    },
+    venue: {
+      id: row.venue_id ?? null,
+      objectPath: row.venue_object_path ?? null,
+      title: row.venue_title ?? null,
+      category: row.venue_category ?? null,
+      rentalUrl: row.venue_rental_url ?? null,
     },
     result,
     error: row.error ?? undefined,

@@ -32,26 +32,27 @@ export default function GalleryClient({ items, credits, userLabel }: Props) {
       style={{ paddingTop: "max(env(safe-area-inset-top), 1rem)" }}
     >
       <header className="px-5 pb-3 flex items-center gap-3">
+        <h1 className="text-lg font-semibold tracking-tight">갤러리</h1>
         <Link
-          href="/welcome"
+          href="/generate"
           aria-label="새로 만들기"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-200 text-neutral-700 active:scale-95 transition"
+          className="ml-1 inline-flex h-9 items-center gap-1 shrink-0 rounded-full bg-neutral-900 px-3.5 text-[13px] font-medium text-white active:scale-95 transition"
         >
           <svg
-            width="18"
-            height="18"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
+            strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
           >
-            <path d="M15 18l-6-6 6-6" />
+            <path d="M12 5v14M5 12h14" />
           </svg>
+          새로 만들기
         </Link>
-        <h1 className="text-lg font-semibold tracking-tight">갤러리</h1>
         <Link
           href="/gallery/credits"
           className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 h-9 text-[13px] font-medium text-neutral-700 active:scale-[0.98] transition"
@@ -94,6 +95,11 @@ export default function GalleryClient({ items, credits, userLabel }: Props) {
                 <span className="absolute right-2 top-2 rounded-full bg-white/85 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-neutral-800">
                   {item.resultUrls.length}장
                 </span>
+                {item.venueTitle ? (
+                  <span className="absolute left-2 top-2 rounded-full bg-black/35 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white">
+                    📍
+                  </span>
+                ) : null}
                 <span className="absolute bottom-2 left-2 rounded-full bg-black/35 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white">
                   {formatDate(item.createdAt)}
                 </span>
@@ -145,7 +151,7 @@ function EmptyState() {
         </p>
       </div>
       <Link
-        href="/welcome"
+        href="/generate"
         className="w-full max-w-xs h-12 rounded-full bg-neutral-900 text-white font-medium flex items-center justify-center active:scale-[0.98] transition"
       >
         사진 만들러 가기
@@ -309,6 +315,28 @@ function Viewer({ item, onClose }: { item: GalleryItem; onClose: () => void }) {
               />
             ))}
           </div>
+        ) : null}
+        {item.venueTitle ? (
+          <a
+            href={item.venueRentalUrl ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`w-full max-w-xs rounded-2xl border border-white/20 px-3 py-2 ${
+              item.venueRentalUrl ? "active:scale-[0.99] transition" : "pointer-events-none"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true">📍</span>
+              <span className="flex-1 text-[12px] font-medium text-white line-clamp-1">
+                {item.venueTitle}
+              </span>
+              {item.venueRentalUrl ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-white/50" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              ) : null}
+            </div>
+          </a>
         ) : null}
         <a
           href={activeUrl}

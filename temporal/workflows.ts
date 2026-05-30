@@ -1,4 +1,4 @@
-import { proxyActivities, setWorkflowOptions } from "@temporalio/workflow";
+import { proxyActivities } from "@temporalio/workflow";
 
 import type * as activities from "./activities";
 
@@ -40,7 +40,8 @@ export async function generateWeddingImageWorkflow(jobId: string) {
   }
 }
 
-setWorkflowOptions(
-  { versioningBehavior: "PINNED" },
-  generateWeddingImageWorkflow,
-);
+// NOTE: versioning behavior is NOT set per-workflow here. When the worker runs in
+// versioned mode (deployed), worker.ts sets `defaultVersioningBehavior: "PINNED"` which
+// covers this workflow. Setting it here unconditionally would make every NON-versioned
+// (local dev) worker fail workflow-task completion ("versioning behavior cannot be
+// specified without deployment options being set with versioned mode").

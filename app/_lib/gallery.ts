@@ -8,13 +8,19 @@ export type GalleryItem = {
   /** Clean (watermark-free) image endpoint. Authorized via the session cookie. */
   resultUrl: string;
   resultUrls: string[];
+  venueTitle: string | null;
+  venueRentalUrl: string | null;
 };
 
 type JobIdRow = {
   id: string;
   created_at: string;
   result_count: number | null;
+  venue_title: string | null;
+  venue_rental_url: string | null;
 };
+
+const GALLERY_SELECT = "id, created_at, result_count, venue_title, venue_rental_url";
 
 function toItem(row: JobIdRow): GalleryItem {
   const resultUrls = Array.from(
@@ -27,6 +33,8 @@ function toItem(row: JobIdRow): GalleryItem {
     createdAt: row.created_at,
     resultUrl: resultUrls[0],
     resultUrls,
+    venueTitle: row.venue_title ?? null,
+    venueRentalUrl: row.venue_rental_url ?? null,
   };
 }
 
@@ -42,7 +50,7 @@ export async function listUserGallery(userId: string): Promise<GalleryItem[]> {
   const [owned, unlocks] = await Promise.all([
     admin
       .from("generation_jobs")
-      .select("id, created_at, result_count")
+      .select(GALLERY_SELECT)
       .eq("user_id", userId)
       .eq("status", "succeeded")
       .not("clean_object_path", "is", null)
@@ -65,7 +73,7 @@ export async function listUserGallery(userId: string): Promise<GalleryItem[]> {
   if (unlockedJobIds.length > 0) {
     const { data, error } = await admin
       .from("generation_jobs")
-      .select("id, created_at, result_count")
+      .select(GALLERY_SELECT)
       .in("id", unlockedJobIds)
       .eq("status", "succeeded")
       .not("clean_object_path", "is", null);

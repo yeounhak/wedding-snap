@@ -22,6 +22,7 @@ import {
   resolveGenerateWorkflowVersioning,
   startGenerateWorkflow,
 } from "@/app/_lib/temporal";
+import { getVenueById, pickVenue, type ResolvedVenue } from "@/app/_lib/venues";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +69,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Resolve the venue (real-location backdrop) BEFORE reserving credits so a dead/expired
+  // venue image never burns a credit reservation. Venue is an enhancement: any failure
+  // degrades to a venue-less generation rather than failing the request.
+  const venueIdField = formData.get("venueId");
+  const venueAutoField = formData.get("venueAuto");
+  let venue: ResolvedVenue | null = null;
+  try {
+    if (typeof venueIdField === "string" && venueIdField) {
+      venue = await getVenueById(venueIdField);
+    } else if (venueAutoField === "1") {
+      venue = await pickVenue();
+    }
+  } catch {
+    venue = null;
+  }
+
   let reservation: Extract<GenerateAccessReservation, { allowed: true }> | null =
     null;
   let record;
@@ -98,6 +115,7 @@ export async function POST(request: NextRequest) {
     record = await createGenerateJob({
       male,
       female,
+      venue,
       accessMode: access.accessMode,
       requiresWatermark: access.requiresWatermark,
       userId: access.userId,
