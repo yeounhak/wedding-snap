@@ -48,13 +48,16 @@ DB enforcement (migration `20260528000000_solo_generation.sql`):
 - `generation_jobs_inputs_present` CHECK: at least one role present
 - `generation_jobs_{male,female}_pair` CHECK: object_path and mime_type are populated together or both null
 
-Prompt branching lives in `temporal/activities.ts` (`resolvePrompt(subjectMode, index)`):
-- Per-slot overrides are checked first as `WEDDING_SNAP_PROMPT_{COUPLE|BRIDE|GROOM}_1` through `_4`; this keeps the four generated images independent instead of using `n=4`.
-- `couple` → `COUPLE_PROMPT`, overridable by `WEDDING_SNAP_PROMPT_COUPLE` or legacy `WEDDING_SNAP_PROMPT`
-- `bride` → `BRIDE_PROMPT`, overridable by `WEDDING_SNAP_PROMPT_BRIDE`
-- `groom` → `GROOM_PROMPT`, overridable by `WEDDING_SNAP_PROMPT_GROOM`
+Prompt resolution lives in **`app/_lib/prompts.ts`** (`resolveTemplate` / `describeTemplate`), the SINGLE source of truth shared by the worker (`temporal/activities.ts` imports it) and the `/admin/prompts` console. There is **ONE venue-aware template per `subjectMode`** (no per-slot prompts) — the old no-venue "base" prompt was removed; every generation composites a real venue image (fed as the LAST input) and a job **without a venue fails** (`ApplicationFailure "VenueRequired"`). Precedence per `subjectMode`, highest first:
+- **env per-mode** `WEDDING_SNAP_PROMPT_{COUPLE|BRIDE|GROOM}` (operational emergency hatch)
+- **DB** `prompt_templates` row, one per `subject_mode` (admin-editable; loaded once per job via `loadPromptTemplates()` in `app/_lib/prompt-templates.ts`; degrades to empty store on any error so a DB hiccup never fails a paid job)
+- **code default** computed `templateDefault()` (Phase 0 V2 background-only wording; `{title}`/`{category}` interpolated). `templateDefaultKo()` is its Korean translation — DISPLAY ONLY; the English is what is sent.
 
-The OpenAI `images.edit` call passes a variable-length array of `createReadStream`s, one per available input image. Each job generates four outputs by running four independent `images.edit({ n: 1 })` calls in parallel; the first result keeps the legacy `clean.jpg` / `watermarked.jpg` paths and the rest use indexed paths.
+env stays ABOVE the DB as an operational emergency hatch. The worker resolves in its own process, so DB edits affect generation only after the worker ships this code (then live, no redeploy). Admin gating: `ADMIN_EMAILS` allowlist (Kakao login emails) via `app/_lib/admin-auth.ts`; the console is desktop-first at `app/admin/` with its own viewport override and shows the real `images.edit` payload.
+
+The OpenAI `images.edit` call passes a variable-length array of input images (people first, venue last) plus a single `prompt` string — there is no system/user split. Each job generates `GENERATED_IMAGES_PER_JOB` (4) outputs by running that ONE prompt through that many independent `images.edit({ n: 1 })` calls in parallel — variety comes from per-call randomness, not per-image prompts; the first result keeps the legacy `clean.jpg` / `watermarked.jpg` paths and the rest use indexed paths.
+
+> **Deploy ordering:** the `/welcome` AppShell generate flow (`GenerateSection`) currently sends NO venue, so once the worker ships the venue-required code those jobs would fail. `/generate` (auto venue) is the intended generation entry point — migrate/disable the AppShell generate path (or attach `venueAuto`) before deploying the worker.
 
 ## UI flow for upload + generate
 

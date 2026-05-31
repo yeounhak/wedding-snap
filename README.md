@@ -49,7 +49,15 @@ WEDDING_SNAP_CREDIT_PACK_SKU=wedding-snap-credit-8
 WEDDING_SNAP_CREDIT_PACK_NAME=웨딩 스냅 8장 크레딧
 WEDDING_SNAP_CREDIT_PACK_AMOUNT=3900
 WEDDING_SNAP_CREDIT_PACK_CREDITS=8
+ADMIN_EMAILS=
 ```
+
+`ADMIN_EMAILS` is a comma-separated allowlist of Kakao login emails (the
+Supabase `user.email`, i.e. the Kakao `account_email`) permitted to open the
+desktop `/admin` console. Leave it empty to lock everyone out. Because the
+Temporal worker resolves prompts in its own process, mirror the
+`WEDDING_SNAP_PROMPT_*` overrides into the Vercel environment too if you want the
+read-only `/admin/prompts` viewer to reflect what the worker actually sends.
 
 Temporal worker deployment variables:
 

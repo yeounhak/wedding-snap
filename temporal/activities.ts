@@ -17,33 +17,11 @@ import {
   uploadJobObject,
   type GenerateJobResult,
 } from "../app/_lib/generate-jobs";
+import { resolveTemplate } from "../app/_lib/prompts";
+import { loadPromptTemplates } from "../app/_lib/prompt-templates";
 
-const COUPLE_PROMPT = [
-  "Create a polished wedding snap portrait based on the two reference photos.",
-  "Preserve each person's facial identity and natural features.",
-  "Style them as a bride and groom in elegant wedding attire.",
-  "Use soft daylight, refined editorial photography, realistic skin texture, and a romantic outdoor wedding atmosphere.",
-  "Do not add text, logos, watermarks, extra people, distorted hands, or surreal details.",
-].join(" ");
-
-const BRIDE_PROMPT = [
-  "Create a polished solo wedding portrait of the bride based on the reference photo.",
-  "Preserve her facial identity and natural features.",
-  "Style her in an elegant white wedding dress with tasteful bridal styling (subtle veil or bouquet is fine).",
-  "Frame as a single-subject editorial wedding portrait — no second person, no groom.",
-  "Use soft daylight, refined editorial photography, realistic skin texture, and a romantic outdoor wedding atmosphere.",
-  "Do not add text, logos, watermarks, extra people, distorted hands, or surreal details.",
-].join(" ");
-
-const GROOM_PROMPT = [
-  "Create a polished solo wedding portrait of the groom based on the reference photo.",
-  "Preserve his facial identity and natural features.",
-  "Style him in an elegant black tuxedo or formal wedding suit with tasteful groom styling.",
-  "Frame as a single-subject editorial wedding portrait — no second person, no bride.",
-  "Use soft daylight, refined editorial photography, realistic skin texture, and a romantic outdoor wedding atmosphere.",
-  "Do not add text, logos, watermarks, extra people, distorted hands, or surreal details.",
-].join(" ");
-
+// Prompt defaults + layered env resolution moved to app/_lib/prompts.ts so the
+// admin viewer (app/admin/prompts) renders exactly what this worker resolves.
 const MODEL = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2";
 const SIZE = process.env.OPENAI_IMAGE_SIZE ?? "1024x1536";
 const QUALITY = process.env.OPENAI_IMAGE_QUALITY ?? "medium";
@@ -77,6 +55,9 @@ export async function generateWeddingImage(jobId: string): Promise<GenerateJobRe
   });
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `wedding-snap-${jobId}-`));
   const subjectMode = record.input.subjectMode;
+  // Load admin-editable prompt overrides once per job. Degrades to an empty
+  // store (env + hardcoded defaults) if the table is missing or unreachable.
+  const promptStore = await loadPromptTemplates();
   const downloads: Array<Promise<string>> = [];
 
   if (record.input.maleObjectPath && record.input.maleMimeType) {
@@ -109,23 +90,26 @@ export async function generateWeddingImage(jobId: string): Promise<GenerateJobRe
       throw new Error("Job has no reference photos");
     }
 
-    // Real-location backdrop (Phase 0 validated): download the mirrored venue image and
-    // feed it as the LAST input so gpt-image-2 composites the subject INTO the venue.
-    // Any failure degrades to a venue-less generation rather than failing the paid job.
-    let venuePath: string | null = null;
-    if (record.venue.objectPath) {
-      try {
-        const candidate = path.join(tempDir, "venue.jpg");
-        await fs.writeFile(candidate, await downloadJobObject(record.venue.objectPath));
-        venuePath = candidate;
-      } catch {
-        venuePath = null;
-      }
+    // Real-location backdrop (Phase 0 validated): the venue image is fed as the LAST
+    // input so gpt-image-2 composites the subject INTO it. Venue is now REQUIRED —
+    // every generation has a location, so a job without one fails rather than
+    // degrading to a (no longer existing) venue-less prompt.
+    if (!record.venue.objectPath) {
+      throw ApplicationFailure.nonRetryable(
+        "Job has no venue assigned; venue is required for generation",
+        "VenueRequired",
+      );
     }
+    const venuePath = path.join(tempDir, "venue.jpg");
+    await fs.writeFile(venuePath, await downloadJobObject(record.venue.objectPath));
 
+    // One prompt per mode; all GENERATED_IMAGES_PER_JOB images use it. Variety
+    // comes from each images.edit call being independent (no fixed seed).
+    const prompt = resolveTemplate(subjectMode, record.venue, promptStore);
+    const editImages = [...imagePaths, venuePath];
     cleanBuffers = await Promise.all(
-      Array.from({ length: GENERATED_IMAGES_PER_JOB }, (_, index) =>
-        generateOneImage(openai, imagePaths, subjectMode, index, venuePath, record.venue),
+      Array.from({ length: GENERATED_IMAGES_PER_JOB }, () =>
+        generateOneImage(openai, editImages, prompt),
       ),
     );
   } catch (error) {
@@ -167,20 +151,7 @@ export async function generateWeddingImage(jobId: string): Promise<GenerateJobRe
   };
 }
 
-async function generateOneImage(
-  openai: OpenAI,
-  imagePaths: string[],
-  subjectMode: "couple" | "bride" | "groom",
-  index: number,
-  venuePath: string | null,
-  venue: { title: string | null; category: string | null },
-) {
-  const useVenue = Boolean(venuePath);
-  const images = useVenue ? [...imagePaths, venuePath as string] : imagePaths;
-  const prompt = useVenue
-    ? resolveVenuePrompt(subjectMode, index, venue)
-    : resolvePrompt(subjectMode, index);
-
+async function generateOneImage(openai: OpenAI, images: string[], prompt: string) {
   const response = await openai.images.edit({
     model: MODEL,
     image: await Promise.all(images.map(toUploadable)),
@@ -194,7 +165,7 @@ async function generateOneImage(
 
   const b64 = response.data?.[0]?.b64_json;
   if (!b64) {
-    throw new Error(`OpenAI image response ${index + 1} did not include image data`);
+    throw new Error("OpenAI image response did not include image data");
   }
 
   return Buffer.from(b64, "base64");
@@ -218,72 +189,6 @@ function getOpenAIBaseURL() {
   const baseURL = process.env.OPENAI_BASE_URL?.trim();
   if (!baseURL) return undefined;
   return /^https?:\/\//i.test(baseURL) ? baseURL : `https://${baseURL}`;
-}
-
-function resolvePrompt(subjectMode: "couple" | "bride" | "groom", index: number) {
-  const promptSlot = process.env[
-    `WEDDING_SNAP_PROMPT_${subjectMode.toUpperCase()}_${index + 1}`
-  ]?.trim();
-  if (promptSlot) return promptSlot;
-
-  if (subjectMode === "bride") {
-    return process.env.WEDDING_SNAP_PROMPT_BRIDE ?? BRIDE_PROMPT;
-  }
-  if (subjectMode === "groom") {
-    return process.env.WEDDING_SNAP_PROMPT_GROOM ?? GROOM_PROMPT;
-  }
-  return (
-    process.env.WEDDING_SNAP_PROMPT_COUPLE ??
-    process.env.WEDDING_SNAP_PROMPT ??
-    COUPLE_PROMPT
-  );
-}
-
-const VENUE_STYLE =
-  "Use soft daylight, refined editorial photography, realistic skin texture. Do not add text, logos, watermarks, extra people, distorted hands, or surreal details.";
-
-// Phase 0 winner (V2): venue image is the LAST input, treated as background ONLY. This
-// wording is validated to preserve facial identity while compositing the subject into the
-// real venue, without pulling any person out of the venue photo. Overridable per-mode/slot
-// via WEDDING_SNAP_PROMPT_{COUPLE|BRIDE|GROOM}_VENUE[_1..4] using {title}/{category}.
-function venueDefaultPrompt(
-  subjectMode: "couple" | "bride" | "groom",
-  venue: { title: string | null; category: string | null },
-) {
-  const who =
-    subjectMode === "bride" ? "the bride" : subjectMode === "groom" ? "the groom" : "the couple";
-  const subjImgs =
-    subjectMode === "couple" ? "the FIRST TWO reference images" : "the FIRST reference image";
-  const loc = venue.title
-    ? `The real location is "${venue.title}"${venue.category ? ` — ${venue.category}` : ""}.`
-    : "";
-  return [
-    `Create a polished wedding photograph of ${who} using ${subjImgs} as the people.`,
-    `Use the LAST reference image ONLY as the real-world background/location: place ${who} naturally INTO that scene as if actually photographed there, matching its lighting, perspective and depth of field.`,
-    `CRITICAL: do NOT copy, add, borrow, or blend any person, face, or body from the background image — it is an empty location reference only.`,
-    `Preserve ${subjectMode === "couple" ? "each person's" : "their"} facial identity and natural features. Dress ${who} in elegant wedding attire.`,
-    loc,
-    VENUE_STYLE,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function resolveVenuePrompt(
-  subjectMode: "couple" | "bride" | "groom",
-  index: number,
-  venue: { title: string | null; category: string | null },
-) {
-  const upper = subjectMode.toUpperCase();
-  const template =
-    process.env[`WEDDING_SNAP_PROMPT_${upper}_VENUE_${index + 1}`]?.trim() ||
-    process.env[`WEDDING_SNAP_PROMPT_${upper}_VENUE`]?.trim();
-  if (template) {
-    return template
-      .replace(/\{title\}/g, venue.title ?? "")
-      .replace(/\{category\}/g, venue.category ?? "");
-  }
-  return venueDefaultPrompt(subjectMode, venue);
 }
 
 function extensionForMime(mimeType: string) {
